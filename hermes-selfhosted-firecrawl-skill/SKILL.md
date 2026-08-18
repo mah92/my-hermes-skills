@@ -36,9 +36,73 @@ Redis, RabbitMQ, FoundationDB pull normally from Docker Hub.
   browser-only proxy) or `docker pull` still fails.
 - Docker Hub IS reachable (base images fine). `dl.google.com` also reachable.
 
-## Bring the stack up
+## Docker-compose changes (required once, before first `docker compose up`)
+
+The official docker-compose.yaml comes with `build:` ACTIVE and the image lines
+COMMENTED OUT. Flip all three so it runs the prebuilt images (no source build):
+
+```yaml
+# x-common-service (api) — was:
+#   image: ghcr.io/firecrawl/firecrawl
+#   build: apps/api
+# now:
+  image: ghcr.io/firecrawl/firecrawl:latest
+  # build: apps/api
+
+# playwright-service — was:
+#   image: ghcr.io/firecrawl/playwright-service:latest
+#   build: apps/playwright-service-ts
+# now:
+    image: ghcr.io/firecrawl/playwright-service:latest
+    # build: apps/playwright-service-ts
+
+# nuq-postgres — was:
+#   image: ghcr.io/firecrawl/nuq-postgres:latest
+#   build: apps/nuq-postgres
+# now:
+    image: ghcr.io/firecrawl/nuq-postgres:latest
+    # build: apps/nuq-postgres
+```
+Also create `.env` in the compose project dir (api stays unauthenticated on
+the trusted LAN — generate a strong POSTGRES_PASSWORD):
+```
+USE_DB_AUTHENTICATION=false
+POSTGRES_USER=postgres
+POSTGRES_PASSWORD=<32+ random chars>
+POSTGRES_DB=postgres
+```
+
+## Does it need to clone firecrawl?
+
+NO for runtime. With the image lines active, NOTHING from the source tree is
+used at runtime — only docker-compose.yaml + .env + the 5 pulled images
+(3 ghcr + redis/rabbitmq/foundationdb). You need the compose file only:
+- keep an existing checkout (`/home/oem/firecrawl`, pinned v2.11.162) and use
+  it as the compose project dir, or
+- copy `docker-compose.yaml` (+ .env) to any folder — `docker compose up -d`
+  works from there, and the checkout can be deleted.
+git clone is only needed to OBTAIN docker-compose.yaml (it is not shipped
+separately). Pin a release tag (`git checkout v2.11.162`) so the compose
+contract matches the images.
+
+## Bring the stack up (after the compose flip)
 ```bash
 cd /home/oem/firecrawl && docker compose up -d
+```
+
+## Hermes wiring
+~/.hermes/.env (add):
+```
+FIRECRAWL_API_URL=http://localhost:3002
+```
+API key NOT needed when self-hosted with USE_DB_AUTHENTICATION=false; leave
+any cloud FIRECRAWL_API_KEY line commented out.
+
+~/.hermes/config.yaml (set via `hermes config set`, never hand-edit):
+```yaml
+web:
+  backend: firecrawl
+  use_gateway: false   # only if not using the Nous Tool Gateway
 ```
 
 ## Verify
@@ -46,9 +110,15 @@ cd /home/oem/firecrawl && docker compose up -d
 docker images | grep firecrawl                                # 3 images present
 curl --silent http://localhost:3002/v0/health/readiness       # {"status":"ok"}
 docker compose ps                                             # services up
+# Hermes-side check (shows which backend is active):
+cd ~/.hermes/hermes-agent && source venv/bin/activate
+python -m tools.web_tools          # expect: Web backend: firecrawl (http://localhost:3002)
+# functional test through Hermes:
+python -c "import asyncio; from tools.web_tools import web_extract_tool; \
+print(asyncio.run(web_extract_tool(urls=['https://example.com'], char_limit=2000)))"
 ```
-Hermes side: `FIRECRAWL_API_URL=http://localhost:3002` in ~/.hermes/.env,
-`web.backend: firecrawl` in config.yaml.
+Restart the gateway (`~/.hermes/scripts/kill-gateway.py`, scheduled via `at` if
+run from inside a gateway session) for live sessions to pick up the backend.
 
 ## Pitfalls (all learned the hard way)
 - NO official images on Docker Hub (devflowinc/firecrawl-simple, mendableai
