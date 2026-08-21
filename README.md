@@ -17,7 +17,8 @@ Composable, lightweight skills for the [Hermes Agent](https://hermes-agent.nousr
 | Skill | Folder | What it does | Usage |
 |---|---|---|---|
 | Self-hosted Firecrawl | `hermes-selfhosted-firecrawl-skill/` | Self-host Firecrawl as the Hermes web backend (search + scrape + crawl) using the 3 official prebuilt ghcr images — no source builds | `docker pull ghcr.io/firecrawl/firecrawl:latest` + 2 more (see SKILL.md) |
-| Libgen downloader | `hermes-libgen-skill/` | Download books from working libgen mirrors: search → metadata → signed get-link → PDF in ~/Downloads, optional Bale delivery | `python3 hermes-libgen-skill/scripts/libgen_download.py --query "best of asimov"` |
+| Libgen book downloader | `hermes-libgen-book-download-skill/` | Download books from working libgen mirrors: search → metadata → signed get-link → PDF in ~/Downloads, optional Bale delivery | `python3 hermes-libgen-book-download-skill/scripts/libgen_download.py --query "best of asimov"` |
+| Libgen article downloader | `hermes-libgen-article-download-skill/` | Download scientific papers from libgen scimag (Articles checkbox): row → ads.php → signed get-link → PDF | `python3 hermes-libgen-article-download-skill/scripts/libgen_article_download.py --query "attention is all you need"` |
 
 ## Installation
 
@@ -41,10 +42,14 @@ my-hermes-skills/
 ├── README.md
 ├── hermes-selfhosted-firecrawl-skill/
 │   └── SKILL.md
-└── hermes-libgen-skill/
+├── hermes-libgen-book-download-skill/
+│   ├── SKILL.md
+│   └── scripts/
+│       └── libgen_download.py
+└── hermes-libgen-article-download-skill/
     ├── SKILL.md
     └── scripts/
-        └── libgen_download.py
+        └── libgen_article_download.py
 ```
 
 ## References
