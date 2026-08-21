@@ -20,6 +20,7 @@ Composable, lightweight skills for the [Hermes Agent](https://hermes-agent.nousr
 | Libgen book downloader | `hermes-libgen-book-download-skill/` | Download books from working libgen mirrors: search → metadata → signed get-link → PDF in ~/Downloads, optional Bale delivery | `python3 hermes-libgen-book-download-skill/scripts/libgen_download.py --query "best of asimov"` |
 | Libgen article downloader | `hermes-libgen-article-download-skill/` | Download scientific papers from libgen scimag (Articles checkbox): row → ads.php → signed get-link → PDF | `python3 hermes-libgen-article-download-skill/scripts/libgen_article_download.py --query "attention is all you need"` |
 | LLM translation | `hermes-translation-skill/` | Translate markdown/text via AvalAI (DeepSeek): paragraph-safe chunks, glossary, resumable, optional Bale send | `python3 hermes-translation-skill/scripts/translate_markdown.py --input ch1.md --glossary g.md --send` |
+| Table as image | `table-as-image/` | Render table requests as PNG (RTL/Persian friendly) instead of markdown — for Bale/Telegram | see SKILL.md |
 
 ## Installation
 
@@ -52,6 +53,7 @@ my-hermes-skills/
     └── scripts/
         └── libgen_article_download.py
 ```
+Plus: `hermes-translation-skill/` and `table-as-image/` (same SKILL.md+scripts layout).
 
 ## References
 
