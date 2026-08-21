@@ -1,25 +1,25 @@
 ---
-name: hermes-libgen-skill
+name: hermes-libgen-book-download-skill
 description: "Use when downloading a book from libgen (search+get+PDF)."
 version: 1.0.0
 author: Ali Sani
 license: MIT
 metadata:
   hermes:
-    tags: [libgen, books, download, pdf, scraping, asimov]
-    related_skills: [hermes-selfhost-firecrawl-skill, hermes-agent]
+    tags: [libgen, books, download, pdf, epub, scraping, asimov]
+    related_skills: [hermes-selfhost-firecrawl-skill, hermes-agent, hermes-libgen-article-download-skill]
 ---
 
-# Libgen Download (working flow, verified)
+# Libgen Book Download (working flow, verified)
 
-Download books from Library Genesis mirrors that WORK from this network.
+Download BOOKS from Library Genesis mirrors that WORK from this network.
 Mirror: **libgen.la** (and libgen.li — identical Gen+ app).
 Verified end-to-end on 2026-08-17: search → metadata → get-link → PDF to disk
-→ send via Bale.
+→ send via Bale. For scientific ARTICLES use hermes-libgen-article-download-skill.
 
 ## When to Use
 - User asks for a book/PDF/story download (e.g. "download an Asimov book")
-- Need search + metadata + actual file from libgen
+- Need search + metadata + actual book file from libgen
 
 ## Flow (matches the site's real button path)
 The site has NO /book/ page (404). Search rows link DIRECTLY to the get-flow:
@@ -28,7 +28,7 @@ get.php?md5=...&key=... → the signed URL downloads the file.
 
 Run the script (full pipeline, filters by author/format, optional Bale send):
 ```bash
-python3 ~/.hermes/skills/research/hermes-libgen-skill/scripts/libgen_download.py \
+python3 ~/.hermes/skills/research/hermes-libgen-book-download-skill/scripts/libgen_download.py \
   --query "best of asimov" --dry-run      # list candidates only
 python3 .../libgen_download.py --query "asimov complete stories" --format pdf --send
 ```
@@ -63,4 +63,10 @@ GET https://libgen.la/json.php?object=f&ids=<id1>,<id2>,...
 - get.php key is per-request and time-limited — fetch ads.php fresh each time
 - Some targets refuse scrapers (quotes.toscrape 403) — normal, pick another
 - Ad-blocker recommended: Gen+ mirrors are ad-gated (bitcoin/donation links in HTML)
-- Search with columns[]=t restricts to Title; default searches all fields
+- Rate limiting is REAL: burst downloads get 503/524/429. Pace requests:
+  sleep 1.5-3s between calls, chunk metadata by 50 ids, retry with backoff.
+- Search with columns[]=t restricts to Title; columns[]=a searches Author
+- Author-field search returns the whole catalog (2000+ ids) — comics included;
+  filter locators, don't trust ranking
+- A 503-heavy failed file is NOT lost — retry it later with fresh ads.php
+- Error 500 on get.php is often transient — retry 3x with sleep
