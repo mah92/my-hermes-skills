@@ -4,7 +4,7 @@
     "inputs": {
       "ckpt_name": "Sana_1600M_1024px.pth",
       "model": "SanaMS_1600M_P1_D20",
-      "dtype": "default",
+      "dtype": "auto",
       "enable_cfg_passthrough": true
     }
   },

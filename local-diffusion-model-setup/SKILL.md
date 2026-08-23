@@ -70,7 +70,10 @@ this one covers MODEL SELECTION and the Sana-specific install recipe.
   cfg ~4; Sana is a FLOW model).
 - Sample workflow SanaV1.json (ExtraModels repo assets) is EDITOR format —
   build API format yourself after the server returns /object_info for exact
-  input names (ready API-format template: templates/sana_1600m_txt2img_api.json)
+  input names (ready API-format template: templates/sana_1600m_txt2img_api.json —
+  NOTE: set SanaCheckpointLoader `dtype` to "auto" (fix #7) and post it
+  wrapped as {"prompt": <dict>, "client_id": "x"} (fix #6); node 165 is
+  unused and can be dropped)
 - First generate at 512px as a smoke test, then 1024px.
 
 ## ComfyUI install notes for this box
@@ -80,7 +83,10 @@ this one covers MODEL SELECTION and the Sana-specific install recipe.
 - On the throttled link, the stock install stalls 30+ min on torch:
   pre-fetch wheels with aria2 (see throttled-network-downloads) and
   `pip install --no-index --find-links`. torchaudio cu124 cp313 wheel is
-  flaky on download.pytorch.org — skip it (PyPI cpu wheel is fine).
+  flaky on download.pytorch.org — you may defer it during install, but before
+  the first run it MUST be reinstalled as torchaudio==2.6.0+cu124 (a PyPI cpu
+  wheel or ANY version mismatch crashes `import torchaudio` at startup — see
+  the Torch version lock section and Runtime fix #3).
 - Verify: `curl -s http://127.0.0.1:8188/system_stats` after `comfy launch
   --background`.
 
@@ -177,17 +183,21 @@ The torch-version lock above is the reason most of these fixes exist.
 Turn the local ComfyUI Sana pipeline into a Hermes MCP tool so the agent
 can generate images with ONE tool call (no hand-built API workflows).
 ComfyUI models stay warm in VRAM between calls, so repeat generations are fast.
-1. MCP server script (stdio protocol only, never print()): FastMCP from the
+1. MCP server script (stdio protocol only — never print to STDOUT; stderr
+   diagnostics are fine and land in Hermes logs): FastMCP from the
    `mcp` package — `from mcp.server.fastmcp import FastMCP;
    mcp = FastMCP("comfy-sana")`. Known-good copy:
-   templates/comfy_sana_mcp_server.py (two-pass: sample+SaveLatent -> copy
+   scripts/comfy_mcp_server.py (bundled with this skill; runtime copy at
+   ~/.hermes/mcp/comfy-sana/server.py) — two-pass: sample+SaveLatent -> copy
    output/latents/*.latent to input/ -> LoadLatent+VAEDecode+SaveImage;
-   validates <=~4.2M pixels; seed -1 -> random; returns final PNG path).
+   validates <=~4.2M pixels; seed -1 -> random; returns final PNG path.
    Run it with the HERMES venv python (/home/oem/.hermes/hermes-agent/venv/bin/python
    — it has the mcp package; system python3 does not).
-2. Register: `echo "Y" | hermes mcp add comfy-sana --command
+2. Install + register:
+   mkdir -p ~/.hermes/mcp/comfy-sana && cp scripts/comfy_mcp_server.py ~/.hermes/mcp/comfy-sana/server.py
+   echo "Y" | hermes mcp add comfy-sana --command
    /home/oem/.hermes/hermes-agent/venv/bin/python --args
-   /home/oem/.hermes/mcp/comfy-sana/server.py`
+   /home/oem/.hermes/mcp/comfy-sana/server.py --connect-timeout 60
    PITFALL: `hermes mcp add` ends with an interactive "Enable all N tools?
    [Y/n/select]:" prompt — with no piped stdin it prints "Cancelled." and
    saves NOTHING. Pipe `echo "Y" |` to confirm.
@@ -196,16 +206,32 @@ ComfyUI models stay warm in VRAM between calls, so repeat generations are fast.
    stdio client (mcp.ClientSession + stdio_client) and call the tool once.
 4. Activation: MCP tools are discovered at agent/session start — NO hot
    reload. Either start a new chat, or restart the gateway via
-   ~/.hermes/scripts/kill-gateway.py.
+   python3 ~/.hermes/scripts/kill-gateway.py.
 5. ComfyUI as a systemd USER unit: ~/.config/systemd/user/comfyui.service
-   (ExecStart=venv/bin/python main.py --port 8188 --listen 127.0.0.1,
-   Restart=on-failure, WantedBy=default.target), daemon-reload + manage with
+   with WorkingDirectory + ABSOLUTE ExecStart (relative paths with a slash
+   are rejected by systemd):
+   [Unit]
+   Description=ComfyUI server (Sana image generation, localhost:8188)
+   After=network-online.target
+   [Service]
+   Type=simple
+   WorkingDirectory=/home/oem/comfy/ComfyUI
+   ExecStart=/home/oem/comfy/ComfyUI/venv/bin/python main.py --port 8188 --listen 127.0.0.1
+   Restart=on-failure
+   RestartSec=5
+   [Install]
+   WantedBy=default.target
+   then daemon-reload + manage with
    systemctl --user. NOTE: keep it DISABLED (do NOT `enable`) — Ali wants
    on-demand only; the MCP server starts it on the first image request.
    From a non-login shell systemctl --user fails with "DBUS_SESSION_BUS_ADDRESS
    and XDG_RUNTIME_DIR not defined" — first export
    XDG_RUNTIME_DIR=/run/user/$(id -u) and
    DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u)/bus.
+   On headless boots /run/user/$(id -u) may not exist at all (Linger=no) —
+   the exports can't create a bus there; that is expected, not a bug, and
+   the MCP server's direct-spawn fallback takes over (see 'ComfyUI
+   lifecycle').
    Kill any Hermes-background ComfyUI proc BEFORE starting the service (port
    8188 conflict). A Hermes background process dies with the gateway — a
    systemd user service does not.
@@ -234,6 +260,9 @@ ComfyUI models stay warm in VRAM between calls, so repeat generations are fast.
   at <=1024px; a 20-step generation + 2-pass decode ~3-10s). If the user
   complains about slowness, first ask whether the server was cold — and note
   the 4s /history poll adds latency granularity.
+- Note: /tmp is wiped at reboot — the fallback spawn log
+  /tmp/comfyui-standalone.log and any throwaway test scripts in /tmp do not
+  survive; recreate them.
 - MCP server ~/.hermes/mcp/comfy-sana/server.py AUTO-STARTS ComfyUI on
   demand: the generate_sana_image tool calls _ensure_comfy() first — if
   /system_stats is unreachable it runs `systemctl --user start comfyui`
@@ -255,7 +284,10 @@ ComfyUI models stay warm in VRAM between calls, so repeat generations are fast.
   state shared between the tool function and the watchdog thread MUST use
   `global` in the function that writes it (UnboundLocalError otherwise);
   Hermes spawns MCP servers with a FILTERED env (PATH/HOME/USER/... only),
-  so COMFY_IDLE_* only works if set in the unit's env or in config env.
+  so COMFY_IDLE_* only works if set at registration time, e.g.
+  `--env COMFY_IDLE_STOP=900 --env COMFY_IDLE_CHECK=30` on `hermes mcp add`
+  (or exported when running the server manually / set as Environment= in
+  the unit).
 - MCP server file: ~/.hermes/mcp/comfy-sana/server.py (auto-start +
   idle-stop + two-pass sampling/decode + size/VRAM guards). A bundled copy
   for (re)installation lives in this skill: scripts/comfy_mcp_server.py —
