@@ -84,10 +84,32 @@ this one covers MODEL SELECTION and the Sana-specific install recipe.
 - Verify: `curl -s http://127.0.0.1:8188/system_stats` after `comfy launch
   --background`.
 
+## Torch version lock — driver 550 caps CUDA at 12.4 (verified 2026-08-22)
+- Driver 550.163.01 → max supported CUDA is 12.4 (NVIDIA requires driver
+  >=560 for CUDA 12.6, so cu126/cu128 wheels are OUT on this box).
+- torch is pinned to 2.6.0+cu124 in the ComfyUI venv — the pytorch cu124
+  index (download.pytorch.org/whl/cu124) ships cp313 linux wheels ONLY up
+  to 2.6.0; there are NO 2.7.x/2.8.x cu124 builds at all (verified against
+  the index page). torch therefore cannot be upgraded.
+- Because torch can't move, every package that assumed a newer torch had to
+  be pinned or patched. Full change set driven by this lock:
+  * torchaudio: was 2.11.0 (built for CUDA 13 — needs libcudart.so.13) and
+    crashed on `import torchaudio` at server start (audio_vae.py imports it
+    unconditionally) → pin torchaudio==2.6.0+cu124 from the cu124 index
+    (cp313 wheel exists there).
+  * torchvision stays 0.21.0+cu124 (matches torch 2.6) — don't let pip
+    resolve it to a newer minor.
+  * comfy-kitchen 0.2.31: torch 2.6's torch.library.custom_op infer_schema
+    rejects lowercase generics (`list[int]`) → patch na.py to use
+    typing.List (fix #1 below).
+  * No flash-attn 3 / sage-int8 attention (need newer torch+toolchain) —
+    ComfyUI runs on the pytorch attention backend; fine for Sana here.
+- If the GPU/driver is EVER upgraded (>=560): upgrade torch to 2.7/2.8+
+  cu126 and REVERT the torch-lock patches (na.py typing patch, torchaudio
+  pin). The int8_attention shim is a separate PyPI-vs-git lag — keep it.
+
 ## Runtime fixes — ComfyUI v0.33.0 + torch 2.6.0+cu124 (verified 2026-08-22)
-All fixes below were required to get the FIRST Sana image out. Driver
-550.163 caps CUDA at 12.4; torch 2.7/2.8 have NO cu124 wheels (cu126 needs
-driver >=560) — so torch stays 2.6 and the packages must be made to fit.
+The torch-version lock above is the reason most of these fixes exist.
 1. comfy-kitchen==0.2.31 (pinned by requirements.txt) crashes at import on
    torch 2.6: `custom_op` infer_schema rejects lowercase `list[int]` in
    backends/eager/na.py (`_op_na3d`). PATCH site-packages: import List from
