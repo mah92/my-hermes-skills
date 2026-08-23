@@ -34,7 +34,30 @@ Redis, RabbitMQ, FoundationDB pull normally from Docker Hub.
 - ghcr.io is NOT reachable for docker from this box without VPN.
 - The VPN must cover the DOCKER DAEMON traffic (tunnel-all mode, not a
   browser-only proxy) or `docker pull` still fails.
+- If the VPN is a LOCAL SOCKS5 proxy (e.g. tunproxy listening on
+  127.0.0.1:1080), point the daemon at it via /etc/docker/daemon.json
+  (requires `systemctl restart docker`):
+```json
+{ "proxies": { "http-proxy": "socks5://127.0.0.1:1080",
+               "https-proxy": "socks5://127.0.0.1:1080",
+               "no-proxy": "localhost,127.0.0.1,::1" } }
+```
+  Verify with `docker info | grep -A2 Proxy`.
 - Docker Hub IS reachable (base images fine). `dl.google.com` also reachable.
+- Flaky tunnels interrupt big pulls mid-layer. NEVER rely on `docker compose
+  up` to pull — it aborts and re-pulls everything every time. Pull each image
+  in a retry loop until `docker images` shows it, then `up` once:
+```bash
+for img in redis:alpine rabbitmq:3-management foundationdb/foundationdb:7.3.63 \
+           ghcr.io/firecrawl/firecrawl:latest \
+           ghcr.io/firecrawl/playwright-service:latest \
+           ghcr.io/firecrawl/nuq-postgres:latest; do
+  for a in $(seq 1 60); do docker pull $img >/dev/null 2>&1 && break; sleep 4; done
+done
+```
+  Completed layers cache, so repeated attempts converge.
+- Pitfall: `pkill -f "compose up"` over SSH matches your OWN remote shell
+  (exit 255). Use `pgrep -f "cli-plugins/docker-compos[e]"` to kill compose.
 
 ## Docker-compose changes (required once, before first `docker compose up`)
 
