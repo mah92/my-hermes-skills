@@ -21,6 +21,7 @@ Composable, lightweight skills for the [Hermes Agent](https://hermes-agent.nousr
 | Libgen article downloader | `hermes-libgen-article-download-skill/` | Download scientific papers from libgen scimag (Articles checkbox): row → ads.php → signed get-link → PDF | `python3 hermes-libgen-article-download-skill/scripts/libgen_article_download.py --query "attention is all you need"` |
 | LLM translation | `hermes-translation-skill/` | Translate markdown/text via AvalAI (DeepSeek): paragraph-safe chunks, glossary, resumable, optional Bale send | `python3 hermes-translation-skill/scripts/translate_markdown.py --input ch1.md --glossary g.md --send` |
 | Table as image | `table-as-image/` | Render table requests as PNG (RTL/Persian friendly) instead of markdown — for Bale/Telegram | see SKILL.md |
+| Local Sana image gen (ComfyUI + MCP) | `local-diffusion-model-setup/` | Sana 1.6 on the 8GB box: ComfyUI install + torch-2.6 runtime fixes, verified resolution ceiling, on-demand start via systemd unit + MCP server with 30-min idle auto-stop | `cp -r local-diffusion-model-setup ~/.hermes/skills/creative/` + bundle scripts/comfy_mcp_server.py → `hermes mcp add comfy-sana` (see SKILL.md) |
 
 ## Installation
 
