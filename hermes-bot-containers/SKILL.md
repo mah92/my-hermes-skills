@@ -28,12 +28,13 @@ nothing ever needs path rewriting:
 
 - `HOME=/home/oem` and `HERMES_HOME=/home/oem/.hermes` (overrides the image default `/opt/data`)
 - The profile dir is mounted AT `/home/oem/.hermes` (host: `~/.hermes/profiles/<name>`)
-- `/home/oem/hermes_files`, `/home/oem/Basir`, `/home/oem/miniconda3` are mounted ro at their host paths
+- `/home/oem/hermes_files`, `/home/oem/Basir`, `/home/oem/.hermes/hermes-agent/venv`,
+`/home/oem/.local/share/uv` are mounted ro at their host paths
 - `/home/oem/workspaces/<name>` is mounted rw at the same host path
 - Profile-internal symlink: `~/.hermes/models -> /home/oem/hermes_files/sherpa-onnx-en-stt`
 
 Verified (2026-08, disposable test container): `python3 ~/.hermes/skills/hermes-persian-tts/scripts/tts.py`
-and `/home/oem/miniconda3/envs/vits2/bin/python /home/oem/Basir/STT/stt.py` — both run
+and `/home/oem/.hermes/hermes-agent/venv/bin/python /home/oem/.hermes/skills/hermes-persian-stt/scripts/stt.py` — both run
 unchanged inside the container and produce audio/transcripts.
 
 ## Runtime access model (accepted by Ali)
@@ -80,8 +81,9 @@ compose file — only in the profile `.env` (mode 600).
     hermes-persian-tts/models/                          matcha-fa_en-zahra-22050-5.onnx, vocos22.onnx, tokens_sherpa_with_fa.txt
     sherpa-onnx-en-stt/                                 paraformer-en (~220M) + streaming-zipformer-en (~70M)
     tts-libs/                                           libonnxruntime.so.1, libespeak-ng.so.1, libicudata.so.70, libicui18n.so.70, libicuuc.so.70
-/home/oem/Basir/                                   <- MatchaTTSInfer, espeak-ng-data (at the ESPEAK_DATA path from .env), STT dev script (ro)
-/home/oem/miniconda3/                              <- mounted ro; CONDA vits2 python runs STT verbatim
+/home/oem/Basir/                                   <- MatchaTTSInfer, espeak-ng-data (at the ESPEAK_DATA path from .env) (ro)
+/home/oem/.hermes/hermes-agent/venv/               <- hermes-agent venv, mounted ro - runs STT (shenava stt.py) verbatim
+/home/oem/.local/share/uv/                         <- real interpreter behind the venv symlink, mounted ro
 ```
 
 - Main system points at the same EN store: `/home/oem/.hermes/models -> /home/oem/hermes_files/sherpa-onnx-en-stt`.
@@ -116,7 +118,7 @@ compose file — only in the profile `.env` (mode 600).
      `/home/oem/.hermes/memory_store.db`
    - `terminal.cwd: /home/oem/workspaces/<name>`
    - TTS/STT provider commands: the MAIN-style `~/.hermes/skills/...` strings,
-     semantics mirror works, e.g. `shenava` command = `/home/oem/miniconda3/envs/vits2/bin/python
+     semantics mirror works, e.g. `shenava` command = `/home/oem/.hermes/hermes-agent/venv/bin/python
      /home/oem/.hermes/skills/hermes-persian-stt/scripts/stt.py --quiet {input_path}`
    - `mcp_servers.comfy-flux`: `command: /home/oem/.hermes/venv-ai/bin/python`,
      `args[0]: /home/oem/.hermes/mcp/comfy-flux/server.py` (server file copied into
@@ -182,7 +184,7 @@ docker exec -u hermes hermes-<name> bash -lc '
   set -a; source ~/.hermes/.env; set +a
   echo "سلام تست" > /tmp/in.txt
   python3 ~/.hermes/skills/hermes-persian-tts/scripts/tts.py --speed 1.0 /tmp/in.txt /tmp/out.ogg
-  /home/oem/miniconda3/envs/vits2/bin/python /home/oem/Basir/STT/stt.py --quiet /tmp/out.ogg'   # round trip
+  /home/oem/.hermes/hermes-agent/venv/bin/python /home/oem/.hermes/skills/hermes-persian-stt/scripts/stt.py --quiet /tmp/out.ogg'   # round trip
 grep "Connected as" /home/oem/.hermes/profiles/<name>/logs/agent.log | tail -1   # Bale connected
 ```
 

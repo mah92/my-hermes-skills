@@ -12,7 +12,7 @@ REPLACEMENTS_CFG = [
     ("python3 /opt/data/skills/hermes-persian-tts/scripts/tts.py --speed",
      "python3 ~/.hermes/skills/hermes-persian-tts/scripts/tts.py --speed"),
     ("/opt/data/venv-ai/bin/python /opt/data/skills/hermes-persian-stt/scripts/stt.py",
-     "/home/oem/miniconda3/envs/vits2/bin/python /home/oem/.hermes/skills/hermes-persian-stt/scripts/stt.py"),
+     "/home/oem/.hermes/hermes-agent/venv/bin/python /home/oem/.hermes/skills/hermes-persian-stt/scripts/stt.py"),
     ("db_path: /opt/data/memory_store.db",
      "db_path: /home/oem/.hermes/memory_store.db"),
     ("command: /opt/data/venv-ai/bin/python",
@@ -54,8 +54,8 @@ for name in PROFILES:
     i = env.find(old_env)
     assert i >= 0, f"[{name}] HERMES_LOCAL_STT_COMMAND missing"
     end = env.find("\n", i)
-    new_line = ("HERMES_LOCAL_STT_COMMAND=/home/oem/miniconda3/envs/vits2/bin/python "
-                "/home/oem/Basir/STT/stt.py --quiet")
+    new_line = ("HERMES_LOCAL_STT_COMMAND=/home/oem/.hermes/hermes-agent/venv/bin/python "
+                "/home/oem/.hermes/skills/hermes-persian-stt/scripts/stt.py --quiet")
     env = env[:i] + new_line + env[end:]
     open(envp, "w", encoding="utf-8").write(env)
     print(f"[{name}] .env HERMES_LOCAL_STT_COMMAND -> verbatim main value")

@@ -65,7 +65,7 @@ IN_WS="$HOST_HOME/workspaces/$NAME"            # same path inside container
 
 [[ -d "$PROFILE_DIR" ]] && { echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2; exit 1; }
 [[ -d "$MAIN_HOME/skills" ]] || { echo "ERROR: $MAIN_HOME/skills not found" >&2; exit 1; }
-[[ -x "$HOST_HOME/miniconda3/envs/vits2/bin/python" ]] || { echo "ERROR: host conda vits2 python not found" >&2; exit 1; }
+[[ -x "$HOST_HOME/.hermes/hermes-agent/venv/bin/python" ]] || { echo "ERROR: host hermes-agent venv python not found ($HOST_HOME/.hermes/hermes-agent/venv/bin/python)" >&2; exit 1; }
 
 echo "==> 1/7 creating profile dirs"
 mkdir -p "$PROFILE_DIR" "$WS_DIR"
@@ -92,7 +92,7 @@ for k in SUDO_PASSWORD BROWSERBASE_API_KEY BROWSERBASE_PROJECT_ID BROWSERBASE_PR
   sed -i "s|^$k=.*|#$k=|" "$PROFILE_DIR/.env"
 done
 # shellcheck disable=SC2016
-sed -i 's|^HERMES_LOCAL_STT_COMMAND=.*|HERMES_LOCAL_STT_COMMAND='"$HOST_HOME"'/miniconda3/envs/vits2/bin/python '"$HOST_HOME"'/Basir/STT/stt.py --quiet|' "$PROFILE_DIR/.env"
+sed -i 's|^HERMES_LOCAL_STT_COMMAND=.*|HERMES_LOCAL_STT_COMMAND='"$HOST_HOME"'/.hermes/hermes-agent/venv/bin/python '"$HOST_HOME"'/.hermes/skills/hermes-persian-stt/scripts/stt.py --quiet|' "$PROFILE_DIR/.env"
 
 echo "==> 3/7 skills + plugins (real copies; models/ re-created as symlinks to the shared store)"
 if [[ "$SKIP_SKILLS" -eq 1 ]]; then
@@ -167,7 +167,7 @@ if "tts" in cfg and "providers" in cfg["tts"] and "matcha" in cfg["tts"]["provid
 if "stt" in cfg and "providers" in cfg["stt"] and "shenava" in cfg["stt"]["providers"]:
     cfg["stt"]["provider"] = "shenava"
     cfg["stt"]["providers"]["shenava"]["command"] = (
-        f"{hh}/miniconda3/envs/vits2/bin/python "
+        f"{hh}/.hermes/hermes-agent/venv/bin/python "
         f"{hh}/.hermes/skills/hermes-persian-stt/scripts/stt.py --quiet {{input_path}}"
     )
 
@@ -216,8 +216,9 @@ doc["services"][name] = {
     "volumes": [
         f"{prof_dir}:/home/oem/.hermes",
         f"{hh}/hermes_files:/home/oem/hermes_files:ro",
+        f"{hh}/.hermes/hermes-agent/venv:/home/oem/.hermes/hermes-agent/venv:ro",
+        f"{hh}/.local/share/uv:/home/oem/.local/share/uv:ro",
         f"{hh}/Basir:/home/oem/Basir:ro",
-        f"{hh}/miniconda3:/home/oem/miniconda3:ro",
         "/usr/lib/locale:/usr/lib/locale:ro",
         "/usr/share/i18n:/usr/share/i18n:ro",
         f"{ws_dir}:/home/oem/workspaces/{name}",
