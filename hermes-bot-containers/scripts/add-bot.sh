@@ -21,6 +21,7 @@
 #   --skip-skills : don't rsync skills (fresh profile gets empty skills dir)
 #   --no-start    : prepare everything but don't docker compose up
 #   --resume      : rebuild an existing (possibly partial) profile instead of erroring
+#   --force       : purge existing profile (dir + workspace + container) and rebuild from scratch
 #   DOCKER_PROXY env: route docker image pulls through an HTTP/SOCKS tunnel
 #                    (banned-egress remotes), e.g. socks5://127.0.0.1:1080
 # =============================================================================
@@ -34,6 +35,7 @@ COMPOSE_FILE="/home/oem/profiles-containers/docker-compose.yaml"
 SKIP_SKILLS=0
 NO_START=0
 RESUME=0
+FORCE=0
 # Derived image = official image + passwordless sudo for the in-container
 # hermes user (see skill scripts/sudo-image.Dockerfile). Rebuild with:
 #   docker build -t nousresearch/hermes-agent-sudo:<TAG> <dir-with-Dockerfile>
@@ -48,6 +50,7 @@ while [[ $# -gt 0 ]]; do
     --skip-skills) SKIP_SKILLS=1;  shift ;;
     --no-start)   NO_START=1;      shift ;;
     --resume)     RESUME=1;        shift ;;
+    --force)      FORCE=1;          shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *)  NAME="$1"; shift ;;
   esac
@@ -70,10 +73,14 @@ IN_WS="$HOST_HOME/workspaces/$NAME"            # same path inside container
 
 if [[ -d "$PROFILE_DIR" ]]; then
   if [[ "$RESUME" -eq 1 ]]; then
-    echo "NOTE: profile $NAME already exists — resuming (skills re-synced with --delete, .env/config rebuilt)"
+    echo "NOTE: profile $NAME already exists — resuming (re-provisioning in place)"
+  elif [[ "$FORCE" -eq 1 ]]; then
+    echo "NOTE: --force: purging existing profile $NAME (profile dir + workspace + container)"
+    rm -rf "$PROFILE_DIR" "$WS_DIR"
+    docker rm -f "hermes-$NAME" >/dev/null 2>&1 || true
   else
     echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2
-    echo "  re-run with --resume to rebuild it from scratch" >&2
+    echo "  re-run with --resume (repair) or --force (purge & rebuild from scratch)" >&2
     exit 1
   fi
 fi
