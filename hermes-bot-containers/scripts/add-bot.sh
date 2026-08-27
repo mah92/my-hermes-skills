@@ -277,10 +277,14 @@ fi
 
 echo "==> 7/7 optional in-container venv (MCP comfy-flux needs mcp<2)"
 if [[ "$NO_START" -eq 0 ]]; then
-  docker exec -u hermes "hermes-$NAME" bash -lc '
+  # time-boxed: on banned-egress hosts pip would hang forever against blocked PyPI
+  timeout 90 docker exec -u hermes "hermes-$NAME" bash -lc '
     python3 -m venv /home/oem/.hermes/venv-ai 2>/dev/null || true
-    /home/oem/.hermes/venv-ai/bin/pip install --quiet "mcp<2" 2>/dev/null || true
-    echo "  venv-ai: $(test -x /home/oem/.hermes/venv-ai/bin/python && echo ok || echo skip)"' 2>/dev/null || true
+    if PIP_DEFAULT_TIMEOUT=5 PIP_RETRIES=0 /home/oem/.hermes/venv-ai/bin/pip install --quiet --timeout 5 --retries 0 "mcp<2" 2>/dev/null; then
+      echo "  venv-ai: ok (mcp<2 installed)"
+    else
+      echo "  venv-ai: ok (mcp<2 skipped - no/blocked PyPI egress)"
+    fi' 2>/dev/null || echo "  (venv step skipped - timed out or unavailable)"
 fi
 
 echo
