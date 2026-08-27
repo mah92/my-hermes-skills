@@ -20,6 +20,8 @@
 #                   /home/oem/profiles-containers/docker-compose.yaml)
 #   --skip-skills : don't rsync skills (fresh profile gets empty skills dir)
 #   --no-start    : prepare everything but don't docker compose up
+#   DOCKER_PROXY env: route docker image pulls through an HTTP/SOCKS tunnel
+#                    (banned-egress remotes), e.g. socks5://127.0.0.1:1080
 # =============================================================================
 set -euo pipefail
 
@@ -234,6 +236,22 @@ doc["services"][name] = {
 yaml.safe_dump(doc, open(cf, "w"), allow_unicode=True, sort_keys=False)
 print(f"  appended service '{name}' to {cf}")
 PY
+
+# If the host can only reach Docker Hub through a tunnel (banned-egress remotes),
+# export DOCKER_PROXY (e.g. socks5://127.0.0.1:1080) to configure the daemon once.
+if [[ -n "${DOCKER_PROXY:-}" ]]; then
+  DROP=/etc/systemd/system/docker.service.d/http-proxy.conf
+  if ! sudo grep -q "$DOCKER_PROXY" "$DROP" 2>/dev/null; then
+    echo "==> 5b/7 configuring docker daemon proxy ($DOCKER_PROXY)"
+    sudo mkdir -p "$(dirname "$DROP")"
+    printf '[Service]\nEnvironment="HTTP_PROXY=%s"\nEnvironment="HTTPS_PROXY=%s"\nEnvironment="NO_PROXY=localhost,127.0.0.1,192.168.0.0/16,10.0.0.0/8"\n' \
+      "$DOCKER_PROXY" "$DOCKER_PROXY" | sudo tee "$DROP" >/dev/null
+    sudo systemctl daemon-reload
+    echo "  restarting docker daemon (containers with restart policies return automatically)..."
+    sudo systemctl restart docker
+    sleep 5
+  fi
+fi
 
 echo "==> 6/7 starting container"
 if [[ "$NO_START" -eq 1 ]]; then
