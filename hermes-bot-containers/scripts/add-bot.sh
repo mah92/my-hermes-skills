@@ -20,6 +20,7 @@
 #                   /home/oem/profiles-containers/docker-compose.yaml)
 #   --skip-skills : don't rsync skills (fresh profile gets empty skills dir)
 #   --no-start    : prepare everything but don't docker compose up
+#   --resume      : rebuild an existing (possibly partial) profile instead of erroring
 #   DOCKER_PROXY env: route docker image pulls through an HTTP/SOCKS tunnel
 #                    (banned-egress remotes), e.g. socks5://127.0.0.1:1080
 # =============================================================================
@@ -32,6 +33,7 @@ ADMINS=""
 COMPOSE_FILE="/home/oem/profiles-containers/docker-compose.yaml"
 SKIP_SKILLS=0
 NO_START=0
+RESUME=0
 # Derived image = official image + passwordless sudo for the in-container
 # hermes user (see skill scripts/sudo-image.Dockerfile). Rebuild with:
 #   docker build -t nousresearch/hermes-agent-sudo:<TAG> <dir-with-Dockerfile>
@@ -45,6 +47,7 @@ while [[ $# -gt 0 ]]; do
     --compose-file) COMPOSE_FILE="$2"; shift 2 ;;
     --skip-skills) SKIP_SKILLS=1;  shift ;;
     --no-start)   NO_START=1;      shift ;;
+    --resume)     RESUME=1;        shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *)  NAME="$1"; shift ;;
   esac
@@ -65,7 +68,15 @@ HOST_MIRROR="$HOST_HOME"
 # shellcheck disable=SC2034
 IN_WS="$HOST_HOME/workspaces/$NAME"            # same path inside container
 
-[[ -d "$PROFILE_DIR" ]] && { echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2; exit 1; }
+if [[ -d "$PROFILE_DIR" ]]; then
+  if [[ "$RESUME" -eq 1 ]]; then
+    echo "NOTE: profile $NAME already exists — resuming (skills re-synced with --delete, .env/config rebuilt)"
+  else
+    echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2
+    echo "  re-run with --resume to rebuild it from scratch" >&2
+    exit 1
+  fi
+fi
 [[ -d "$MAIN_HOME/skills" ]] || { echo "ERROR: $MAIN_HOME/skills not found" >&2; exit 1; }
 [[ -x "$HOST_HOME/.hermes/hermes-agent/venv/bin/python" ]] || { echo "ERROR: host hermes-agent venv python not found ($HOST_HOME/.hermes/hermes-agent/venv/bin/python)" >&2; exit 1; }
 
