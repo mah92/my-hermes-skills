@@ -197,6 +197,8 @@ echo "==> 5/7 compose service block (path-mirror mounts — profile at /home/oem
 python3 - "$NAME" "$COMPOSE_FILE" "$PROFILE_DIR" "$WS_DIR" "$HOST_HOME" <<'PY'
 import sys, os, yaml
 name, cf, prof_dir, ws_dir, hh = sys.argv[1:6]
+# the compose dir may not exist on this host (e.g. remote VPS) - create it
+os.makedirs(os.path.dirname(cf), exist_ok=True)
 doc = yaml.safe_load(open(cf)) if (os.path.exists(cf) and open(cf).read().strip()) else {"services": {}}
 doc.setdefault("services", {})
 if name in doc["services"]:
