@@ -99,11 +99,13 @@ compose file — only in the profile `.env` (mode 600).
    `FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`, `VOICE_TOOLS_OPENAI_KEY`, `GROQ_API_KEY`,
    `ELEVENLABS_API_KEY`. Keep the avalai LLM key + `DEEPSEEK_API_KEY` + Bale + TTS/STT lines.
    `HERMES_LOCAL_STT_COMMAND` stays the MAIN value (host paths = container paths now).
-3. **Skills**: `rsync -aL --delete` main skills (dereference all links), EXCLUDING
+3. **Skills + plugins**: `rsync -aL --delete` main skills (dereference all links), EXCLUDING
    `models/` links — discover them with `find . -type l -name models` PLUS a check
    for `*/models` inside top-level skill symlinks (`hermes-persian-tts` itself is a
    link, so plain `find` misses its `models/`) — then re-create those links
-   (targets are absolute into hermes_files).
+   (targets are absolute into hermes_files). Copy `plugins/` too (`rsync -a
+   --exclude='.git/'`) — the Bale platform adapter lives there and the gateway
+   CANNOT start the platform without it (a real bug hit during rebuild testing).
 4. **Memory/soul**: fresh profile = no admin data; do not copy main memories.
 5. **config.yaml**: generated from main's config with these overrides:
    - `platforms: {api_server: {enabled: false}}`
