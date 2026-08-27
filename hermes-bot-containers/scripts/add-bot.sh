@@ -51,7 +51,8 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [[ -z "$NAME" || -z "$BALE_TOKEN" || -z "$BALE_USER" ]]; then
-  echo "Usage: $0 <name> --token <TOKEN> --user <USER_ID> [--admins ...] [--compose-file ...] [--skip-skills] [--no-start]" >&2
+  echo "Usage: $0 <name> --token <TOKEN> --user <USER_ID> [--admins ...] [--compose-fi
+le ...] [--skip-skills] [--no-start]" >&2
   exit 1
 fi
 if ! [[ "$NAME" =~ ^[a-z0-9-]+$ ]]; then echo "Name must be lowercase [a-z0-9-]" >&2; exit 1; fi
@@ -69,32 +70,6 @@ if [[ -d "$PROFILE_DIR" ]]; then
   echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2
   echo "  remove it first: scripts/rm-bot.sh $NAME" >&2
   exit 1
-file ...] [--skip-skills] [--no-start]" >&2
-  exit 1
-fi
-if ! [[ "$NAME" =~ ^[a-z0-9-]+$ ]]; then echo "Name must be lowercase [a-z0-9-]" >&2; exit 1; fi
-
-HOST_HOME="${HOME:-/home/oem}"
-MAIN_HOME="$HOST_HOME/.hermes"
-PROFILE_DIR="$MAIN_HOME/profiles/$NAME"
-WS_DIR="$HOST_HOME/workspaces/$NAME"
-# shellcheck disable=SC2034  # document the mirror invariant (host path = container path)
-HOST_MIRROR="$HOST_HOME"
-# shellcheck disable=SC2034
-IN_WS="$HOST_HOME/workspaces/$NAME"            # same path inside container
-
-if [[ -d "$PROFILE_DIR" ]]; then
-  if [[ "$RESUME" -eq 1 ]]; then
-    echo "NOTE: profile $NAME already exists — resuming (re-provisioning in place)"
-  elif [[ "$FORCE" -eq 1 ]]; then
-    echo "NOTE: --force: purging existing profile $NAME (profile dir + workspace + container)"
-    rm -rf "$PROFILE_DIR" "$WS_DIR"
-    docker rm -f "hermes-$NAME" >/dev/null 2>&1 || true
-  else
-    echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2
-    echo "  re-run with --resume (repair) or --force (purge & rebuild from scratch)" >&2
-    exit 1
-  fi
 fi
 [[ -d "$MAIN_HOME/skills" ]] || { echo "ERROR: $MAIN_HOME/skills not found" >&2; exit 1; }
 [[ -x "$HOST_HOME/.hermes/hermes-agent/venv/bin/python" ]] || { echo "ERROR: host hermes-agent venv python not found ($HOST_HOME/.hermes/hermes-agent/venv/bin/python)" >&2; exit 1; }
