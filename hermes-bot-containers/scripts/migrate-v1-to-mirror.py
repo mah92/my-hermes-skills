@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""Migrate bot-a + bot-b profiles from v1 (/opt/data layout) to the
-v2 path-mirror layout (/home/oem/.hermes inside the container)."""
+"""Migrate containerized bot profiles from the v1 (/opt/data layout) to the
+v2 path-mirror layout (/home/oem/.hermes inside the container).
+Edit PROFILES below before running."""
 import sys, shutil, os
 
-PROFILES = ["bot-a", "bot-b"]
+PROFILES = []  # e.g. ["mom-bot", "kids-bot"] - one-time v1->v2 migration
 BASE = "/home/oem/.hermes/profiles"
 
 REPLACEMENTS_CFG = [

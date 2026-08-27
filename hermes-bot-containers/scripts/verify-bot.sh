@@ -1,7 +1,7 @@
 #!/bin/bash
 # verify-bot.sh <name> — full post-deployment verification for a path-mirror
 # containerized bot (hermes-bot-containers skill). Run on the HOST.
-# Usage: bash verify-bot.sh bot-a
+# Usage: bash verify-bot.sh <bot-name>
 set -uo pipefail
 NAME="${1:?usage: verify-bot.sh <name>}"
 C="hermes-$NAME"

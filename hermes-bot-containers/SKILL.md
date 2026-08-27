@@ -15,7 +15,7 @@ metadata:
 ## When to Use
 
 - Setting up a new isolated Hermes bot profile for another person (family/friends) on Bale or Telegram.
-- Recreating/repairing the containerized bots (`hermes-bot-a`, `hermes-bot-b`) after config or mount changes.
+- Recreating/repairing a containerized bot (`hermes-<bot-name>`) after config or mount changes.
 - Diagnosing broken voice (STT or TTS) or missing models inside a containerized profile.
 - Answering "why did the container download a model / why doesn't voice work in the container".
 
