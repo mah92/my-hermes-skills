@@ -58,17 +58,23 @@ def download(url, dest):
 
 def send_bale(path):
     token = None
+    chat = os.environ.get("BALE_CHAT_ID", "")
     env_path = os.path.expanduser("~/.hermes/.env")
     if os.path.exists(env_path):
         for line in open(env_path):
             if line.startswith("BALE_BOT_TOKEN="):
                 token = line.split("=", 1)[1].strip().strip('"').strip("'")
+            elif line.startswith("BALE_CHAT_ID=") and not chat:
+                chat = line.split("=", 1)[1].strip().strip('"').strip("'")
     if not token:
         print("no BALE_BOT_TOKEN in ~/.hermes/.env — skipping send")
         return False
+    if not chat:
+        print("no BALE_CHAT_ID in env or ~/.hermes/.env — skipping send")
+        return False
     ok = subprocess.run(
         ["curl", "-s", "--max-time", "300",
-         "-F", f"chat_id=YOUR_BALE_CHAT_ID",
+         "-F", f"chat_id={chat}",
          "-F", f"document=@{path}",
          f"https://tapi.bale.ai/bot{token}/sendDocument"],
         capture_output=True, text=True).stdout

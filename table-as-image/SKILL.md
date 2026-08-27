@@ -155,9 +155,9 @@ def read_token():
                 return line.strip().split("=", 1)[1]
 
 token = read_token()
-# chat_id: DM starts with 9 (e.g. YOUR_BALE_CHAT_ID), group starts with 6 (e.g. 6042445502).
+# chat_id: DM starts with 9 (e.g. 123456789), group starts with 6 (e.g. 6042445502).
 # Find current session chat: grep "inbound message" ~/.hermes/logs/gateway.log | tail
-chat_id = "YOUR_BALE_CHAT_ID"
+chat_id = "123456789"  # ← replace with your actual chat id
 for method, field, cap in [("sendPhoto", "photo", "جدول"),
                            ("sendDocument", "document", "فایل کامل (وضوح اصلی)")]:
     cmd = ["curl", "-s", "-X", "POST", f"https://tapi.bale.ai/bot{token}/{method}",

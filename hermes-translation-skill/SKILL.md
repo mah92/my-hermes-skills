@@ -53,7 +53,7 @@ python3 ~/.hermes/skills/mlops/hermes-translation-skill/scripts/translate_markdo
 4. Assemble parts in order → post-process: split same-line adjacent
    dialogue (`» «` → `»\n\n«`).
 5. Verify: report source vs output paragraph counts and char counts.
-6. Optional --send: upload via Bale sendDocument (chat YOUR_BALE_CHAT_ID).
+6. Optional --send: upload via Bale sendDocument (chat from BALE_CHAT_ID env or ~/.hermes/.env).
 
 ## Pitfalls
 - If the model merges paragraphs despite the prompt, post-process with:

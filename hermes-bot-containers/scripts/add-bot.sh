@@ -10,12 +10,12 @@
 # Bale-token/user substitution — no in-container path rewriting ever needed.
 #
 # USAGE:
-#   ./add-bot.sh <name> --token 123:ABC... --user 1073265647 [--admins YOUR_BALE_CHAT_ID]
+#   ./add-bot.sh <name> --token 123:ABC... --user <OWNER_ID> [--admins <ID1,ID2>]
 #     [--compose-file /path/compose.yaml] [--skip-skills] [--no-start]
 #   <name>        : profile & container name, lowercase [a-z0-9-]
 #   --token       : Bale bot token (unique per bot)
 #   --user        : primary Bale user id allowed to chat with this bot
-#   --admins      : extra allowed user(s), comma-separated (default YOUR_BALE_CHAT_ID)
+#   --admins      : extra allowed user(s), comma-separated (default: none)
 #   --compose-file: compose file to append the service to (default
 #                   /home/oem/profiles-containers/docker-compose.yaml)
 #   --skip-skills : don't rsync skills (fresh profile gets empty skills dir)
@@ -26,7 +26,7 @@ set -euo pipefail
 NAME=""
 BALE_TOKEN=""
 BALE_USER=""
-ADMINS="YOUR_BALE_CHAT_ID"
+ADMINS=""
 COMPOSE_FILE="/home/oem/profiles-containers/docker-compose.yaml"
 SKIP_SKILLS=0
 NO_START=0
@@ -77,11 +77,12 @@ cp "$MAIN_HOME/.env" "$PROFILE_DIR/.env"
 BALE_TOKEN_SED=$(printf '%s' "$BALE_TOKEN" | sed 's/[&|\\]/\\&/g')
 BALE_USER_SED=$(printf '%s' "$BALE_USER" | sed 's/[&|\\]/\\&/g')
 ADMINS_SED=$(printf '%s' "$ADMINS" | sed 's/[&|\\]/\\&/g')
+if [[ -n "$ADMINS" ]]; then ALLOWED_SED="$BALE_USER_SED,$ADMINS_SED"; else ALLOWED_SED="$BALE_USER_SED"; fi
 sed -i \
   -e "s|^BALE_BOT_TOKEN=.*|BALE_BOT_TOKEN=$BALE_TOKEN_SED|" \
   -e "s|^BALE_HOME_CHANNEL=.*|BALE_HOME_CHANNEL=$BALE_USER_SED|" \
-  -e "s|^BALE_ALLOWED_USERS=.*|BALE_ALLOWED_USERS=$BALE_USER_SED,$ADMINS_SED|" \
-  -e "s|^BALE_ALLOWED_CHATS=.*|BALE_ALLOWED_CHATS=$BALE_USER_SED,$ADMINS_SED|" \
+  -e "s|^BALE_ALLOWED_USERS=.*|BALE_ALLOWED_USERS=$ALLOWED_SED|" \
+  -e "s|^BALE_ALLOWED_CHATS=.*|BALE_ALLOWED_CHATS=$ALLOWED_SED|" \
   "$PROFILE_DIR/.env"
 # strip admin secrets (keep avalai/deepseek LLM keys + Bale + TTS/STT lines)
 for k in SUDO_PASSWORD BROWSERBASE_API_KEY BROWSERBASE_PROJECT_ID BROWSERBASE_PROXIES \
@@ -255,6 +256,6 @@ fi
 
 echo
 echo "DONE. Profile: $PROFILE_DIR | Workspace: $WS_DIR"
-echo "Bale user $BALE_USER (+$ADMINS) can now chat with the bot."
+echo "Bale user $BALE_USER${ADMINS:+ (+$ADMINS)} can now chat with the bot."
 echo "Quick voice check:"
 echo "  docker exec -u hermes hermes-$NAME bash -lc 'echo سلام > /tmp/x.txt && python3 ~/.hermes/skills/hermes-persian-tts/scripts/tts.py --speed 1.0 /tmp/x.txt /tmp/x.ogg'"

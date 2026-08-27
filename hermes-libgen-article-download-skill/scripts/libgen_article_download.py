@@ -107,14 +107,19 @@ def main():
         print(subprocess.run(["file", dest], capture_output=True, text=True).stdout.strip())
         if args.send:
             token = ""
+            chat = os.environ.get("BALE_CHAT_ID", "")
             env_path = os.path.expanduser("~/.hermes/.env")
             if os.path.exists(env_path):
                 for line in open(env_path):
                     if line.startswith("BALE_BOT_TOKEN="):
                         token = line.split("=", 1)[1].strip().strip('"').strip("'")
-            if token:
+                    elif line.startswith("BALE_CHAT_ID=") and not chat:
+                        chat = line.split("=", 1)[1].strip().strip('"').strip("'")
+            if token and not chat:
+                print("no BALE_CHAT_ID in env or ~/.hermes/.env — skipped send")
+            if token and chat:
                 r = subprocess.run(["curl", "-s", "--max-time", "300",
-                                    "-F", "chat_id=YOUR_BALE_CHAT_ID",
+                                    "-F", f"chat_id={chat}",
                                     "-F", f"document=@{dest}",
                                     f"https://tapi.bale.ai/bot{token}/sendDocument"],
                                    capture_output=True, text=True).stdout

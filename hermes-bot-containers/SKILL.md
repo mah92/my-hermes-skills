@@ -54,7 +54,7 @@ unchanged inside the container and produce audio/transcripts.
 ```bash
 # ONE command adds a whole bot (profile + skills + .env + compose service + container):
 ~/.hermes/skills/system-admin/hermes-bot-containers/scripts/add-bot.sh \
-  <name> --token <BALE_TOKEN> --user <USER_ID> [--admins YOUR_BALE_CHAT_ID] \
+  <name> --token <BALE_TOKEN> --user <USER_ID> [--admins <ID1,ID2>] \
   [--compose-file ...] [--no-start]
 ```
 
@@ -94,7 +94,7 @@ compose file — only in the profile `.env` (mode 600).
 
 1. **Profile**: `mkdir -p ~/.hermes/profiles/<name>` (or `hermes profile create <name>`).
 2. **.env**: copy main `.env`; swap `BALE_BOT_TOKEN`, `BALE_HOME_CHANNEL`,
-   `BALE_ALLOWED_USERS`/`CHATS` (always add admin id YOUR_BALE_CHAT_ID); scrub secrets:
+   `BALE_ALLOWED_USERS`/`CHATS` (owner + any extra admins, explicitly); scrub secrets:
    `SUDO_PASSWORD`, `BROWSERBASE_*`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `FAL_KEY`,
    `FIRECRAWL_API_KEY`, `OPENROUTER_API_KEY`, `VOICE_TOOLS_OPENAI_KEY`, `GROQ_API_KEY`,
    `ELEVENLABS_API_KEY`. Keep the avalai LLM key + `DEEPSEEK_API_KEY` + Bale + TTS/STT lines.
