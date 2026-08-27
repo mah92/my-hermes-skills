@@ -106,6 +106,9 @@ else
   mapfile -t MOD_LINKS < <({ find . -type l -name models; for d in */; do d="${d%/}"; [ -L "$d" ] && [ -L "$d/models" ] && echo "./$d/models"; done; } | sort -u)
   EXC=()
   for rel in "${MOD_LINKS[@]}"; do EXC+=(--exclude="${rel#./}"); done
+  # dangling symlinks cannot be dereferenced by rsync -L (error 23) - exclude
+  # them so a broken leftover link cannot abort the whole skills copy
+  while IFS= read -r rel; do EXC+=(--exclude="${rel#./}"); done < <(find . -xtype l 2>/dev/null | sort -u)
   rsync -aL --delete "${EXC[@]}" "$MAIN_HOME/skills/" "$PROFILE_DIR/skills/"
   for rel in "${MOD_LINKS[@]}"; do
     mkdir -p "$PROFILE_DIR/skills/$(dirname "$rel")"
