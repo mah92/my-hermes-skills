@@ -59,6 +59,8 @@ unchanged inside the container and produce audio/transcripts.
   [--compose-file ...] [--no-start]
 ```
 
+Remove a bot (container + profile + workspace + compose service): `scripts/rm-bot.sh <name>`.
+
 See the script header for all options. The script does: profile dirs + workspace →
 .env copied from main (Bale token/user swapped, secrets stripped if present) → skills rsync as
 REAL copies with `models/` symlinks re-created → config.yaml generated from the main

@@ -20,8 +20,6 @@
 #                   /home/oem/profiles-containers/docker-compose.yaml)
 #   --skip-skills : don't rsync skills (fresh profile gets empty skills dir)
 #   --no-start    : prepare everything but don't docker compose up
-#   --resume      : rebuild an existing (possibly partial) profile instead of erroring
-#   --force       : purge existing profile (dir + workspace + container) and rebuild from scratch
 #   DOCKER_PROXY env: route docker image pulls through an HTTP/SOCKS tunnel
 #                    (banned-egress remotes), e.g. socks5://127.0.0.1:1080
 # =============================================================================
@@ -34,8 +32,6 @@ ADMINS=""
 COMPOSE_FILE="/home/oem/profiles-containers/docker-compose.yaml"
 SKIP_SKILLS=0
 NO_START=0
-RESUME=0
-FORCE=0
 # Derived image = official image + passwordless sudo for the in-container
 # hermes user (see skill scripts/sudo-image.Dockerfile). Rebuild with:
 #   docker build -t nousresearch/hermes-agent-sudo:<TAG> <dir-with-Dockerfile>
@@ -49,8 +45,6 @@ while [[ $# -gt 0 ]]; do
     --compose-file) COMPOSE_FILE="$2"; shift 2 ;;
     --skip-skills) SKIP_SKILLS=1;  shift ;;
     --no-start)   NO_START=1;      shift ;;
-    --resume)     RESUME=1;        shift ;;
-    --force)      FORCE=1;          shift ;;
     -*) echo "Unknown option: $1" >&2; exit 1 ;;
     *)  NAME="$1"; shift ;;
   esac
@@ -58,6 +52,24 @@ done
 
 if [[ -z "$NAME" || -z "$BALE_TOKEN" || -z "$BALE_USER" ]]; then
   echo "Usage: $0 <name> --token <TOKEN> --user <USER_ID> [--admins ...] [--compose-file ...] [--skip-skills] [--no-start]" >&2
+  exit 1
+fi
+if ! [[ "$NAME" =~ ^[a-z0-9-]+$ ]]; then echo "Name must be lowercase [a-z0-9-]" >&2; exit 1; fi
+
+HOST_HOME="${HOME:-/home/oem}"
+MAIN_HOME="$HOST_HOME/.hermes"
+PROFILE_DIR="$MAIN_HOME/profiles/$NAME"
+WS_DIR="$HOST_HOME/workspaces/$NAME"
+# shellcheck disable=SC2034  # document the mirror invariant (host path = container path)
+HOST_MIRROR="$HOST_HOME"
+# shellcheck disable=SC2034
+IN_WS="$HOST_HOME/workspaces/$NAME"            # same path inside container
+
+if [[ -d "$PROFILE_DIR" ]]; then
+  echo "ERROR: profile $NAME already exists at $PROFILE_DIR" >&2
+  echo "  remove it first: scripts/rm-bot.sh $NAME" >&2
+  exit 1
+file ...] [--skip-skills] [--no-start]" >&2
   exit 1
 fi
 if ! [[ "$NAME" =~ ^[a-z0-9-]+$ ]]; then echo "Name must be lowercase [a-z0-9-]" >&2; exit 1; fi
