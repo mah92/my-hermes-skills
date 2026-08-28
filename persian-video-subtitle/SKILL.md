@@ -167,6 +167,13 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    Split each run's words into ≤9-word cues with `time = start + dur*(word_idx/len(words))`.
    WHY VAD AT ALL: paraformer-en emits NO word timestamps (res.words==[], timestamps==None) —
    segment timing MUST come from the VAD. script: `scripts/transcribe_tenvad.py`.
+   CONTAINERS (hermes-bot-containers): keep a model copy in the shared store at
+   `hermes_files/sherpa-vad/ten-vad.onnx` (ro-mounted in every bot container) and pass its path
+   as argv[3] — the `~/.cache` default is not visible inside containers. Verified 2026-08-28 in
+   hermes-marziye: full pipeline + skills list (image venv `/opt/hermes/.venv/bin/hermes skills
+   list`) shows the skill enabled. NOTE: the mounted HOST hermes-agent venv's `hermes` CLI fails
+   to import hermes_cli inside containers (system-site-packages dependency) — use the image's
+   own `/opt/hermes/.venv/bin/hermes` for CLI checks.
    UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr exactly
    once (multiplying twice silently collapses the cue list to 0).
 2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of 60 lines,
