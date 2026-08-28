@@ -156,7 +156,11 @@ wb.save('output.xlsx')
 Pipeline: local audio → TenVad segmentation with timestamps → translate per segment → SRT/ASS → ffmpeg burn → vision QC → Bale.
 
 1. **Audio + segmentation (sherpa Tencent VAD — VERIFIED)**: `ffmpeg -i in.mp4 -ar 16000 -ac 1 out.wav`;
-   then **TenVad** via `sherpa_onnx.VoiceActivityDetector` (model `ten-vad.onnx` ~332KB from the
+   **USE THE HERMES VENV PYTHON FOR EVERYTHING sherpa-related**:
+   `$HOME/.hermes/hermes-agent/venv/bin/python` — sherpa_onnx 1.13.4 is installed THERE (the
+   conda `vits2` env has an older 1.12.11; do NOT use it for this pipeline). This venv is also
+   ro-mounted into the bot containers at the same path, so the same command works in-container.
+   Then **TenVad** via `sherpa_onnx.VoiceActivityDetector` (model `ten-vad.onnx` ~332KB from the
    k2-fsa sherpa-onnx asr-models release, direct GitHub download works; keep a local copy under
    `~/.cache/sherpa/`). Config: window_size=768, threshold=0.5, min_silence=0.4, min_speech=0.25,
    max_speech=20; feed 768-sample windows, drain `vad.front` (segment `.start` is in SAMPLES;
