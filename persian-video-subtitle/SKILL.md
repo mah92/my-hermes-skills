@@ -179,11 +179,13 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    own `/opt/hermes/.venv/bin/hermes` for CLI checks.
    UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr exactly
    once (multiplying twice silently collapses the cue list to 0).
-2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of 60 lines,
+2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of **40 lines**
+   (60-line chunks returned EMPTY responses on deepseek-v4-flash during the marziye E2E run
+   2026-08-28 — smaller chunks + a retry pass fixed it),
    prompt "ID<TAB>English" → "ID<TAB>Persian", concise spoken style, ≤~70 chars, keep proper
    nouns (Moltbook, agent, AI), نیمفاصله. write_file REFUSES `N|text` lines (looks like read_file
    output) → use TAB separator. Save progress as JSON {idx: fa} after every chunk (resume-safe);
-   backfill misses in a second pass.
+   backfill misses in a second pass; if a chunk returns empty, retry with the SAME chunk smaller.
 3. **Zero-overlap SRT/ASS** (lesson: overlapping cues = libass stacks them = vertical jitter):
    `end_i = min(end_i, next_start)` with min duration 0.6s. ASS header: PlayResX=video width,
    PlayResY=video height, Alignment=2, MarginV=24, FontSize≈19@360p, Outline=1.5, Shadow=0.6,
