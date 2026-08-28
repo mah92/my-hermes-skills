@@ -179,13 +179,15 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    own `/opt/hermes/.venv/bin/hermes` for CLI checks.
    UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr exactly
    once (multiplying twice silently collapses the cue list to 0).
-2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of **40 lines**
-   (60-line chunks returned EMPTY responses on deepseek-v4-flash during the marziye E2E run
-   2026-08-28 — smaller chunks + a retry pass fixed it),
+2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of **40 lines
+   with `max_tokens=16384`** (60-line chunks got TRUNCATED/EMPTY responses on deepseek-v4-flash —
+   verified twice: 2026-08-28 on the host AND in the marziye container E2E; 40/16384 → 100%;
+   a system hint «فقط خطوط ID<TAB>متن را برگردان، بدون توضیح» helps),
    prompt "ID<TAB>English" → "ID<TAB>Persian", concise spoken style, ≤~70 chars, keep proper
    nouns (Moltbook, agent, AI), نیمفاصله. write_file REFUSES `N|text` lines (looks like read_file
    output) → use TAB separator. Save progress as JSON {idx: fa} after every chunk (resume-safe);
-   backfill misses in a second pass; if a chunk returns empty, retry with the SAME chunk smaller.
+   backfill misses in a second pass; DIAGNOSE empty responses with ONE raw API test call before
+   changing parameters (30s, saves retry loops).
 3. **Zero-overlap SRT/ASS** (lesson: overlapping cues = libass stacks them = vertical jitter):
    `end_i = min(end_i, next_start)` with min duration 0.6s. ASS header: PlayResX=video width,
    PlayResY=video height, Alignment=2, MarginV=24, FontSize≈19@360p, Outline=1.5, Shadow=0.6,
@@ -226,6 +228,15 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    sherpa stack; propose heavy installs before running.
 4. USER PREFERENCE: cost/weight-conscious — do web_search + GitHub checks FIRST, install only the
    lightest working tool, visually confirm BEFORE ≈100MB downloads / ≈10min CPU runs.
+5. **marziye container E2E (2026-08-28, her own 17-min session) — problems SHE hit & solved,
+   now encoded here**: (a) translation: 60-line chunks → truncated/empty API responses; fix =
+   CHUNK=40 + max_tokens=16384 (100% success) — she diagnosed with ONE raw API test call first;
+   (b) STALE artifacts from earlier runs in the workspace (old segments.json / fa_cues.json /
+   fa.srt / fa.ass) get misread as state — run each job in a FRESH output dir or delete the four
+   files before starting; (c) QC negative control: frame from a known cue-GAP must show only
+   noise-level pixels — proves the pixel test isn't a false positive; and the vision model READ
+   the subtitle at t=480s and it matched the cue translation for that instant (validates sync).
+   The whole pipeline ran fully inside the container: no YouTube, no web captions, no downloads.
 
 ### Related skills found on the web (2026-08-28)
 - `Jaqen00/Skills` → `subtitle-burn` (github.com/Jaqen00/Skills): ffmpeg/libass burn, width-based
