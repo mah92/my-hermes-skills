@@ -153,20 +153,22 @@ wb.save('output.xlsx')
 
 Pipeline: local audio → segment with timestamps → translate per segment → SRT/ASS → ffmpeg burn → vision QC → Bale.
 
-1. **Audio + segmentation (this box, NO downloads needed)**: `ffmpeg -i in.mp4 -ar 16000 -ac 1 out.wav`;
-   energy-VAD (30ms RMS, `thr = max(0.02, p25 + 0.25*(p90-p25))`) → JOIN speech runs with gap ≤0.7s
-   (cap 16s, split long runs at deepest internal silence) → decode EACH RUN with sherpa-onnx
-   paraformer-en (`~/.hermes/hermes-agent/venv/bin/python` has sherpa_onnx; model at
-   `~/.hermes/models/sherpa-onnx-paraformer-en-2023-09-16` = mirror of hermes_files store).
-   CRITICAL: decode LONG runs, not 1-3s blips — paraformer hallucinates fragmentary text
-   ("yeah yeah generalized village") on tiny chunks; 5-20s chunks give grammatical text.
-   Then split each run's words into ≤9-word cues with `time = start + dur*(word_idx/len(words))`.
-   Result: ~500 cues, ~92% audio coverage, avg 2.2s. scripts: `workspaces/moltbook-subs/transcribe_vad.py`
-   (same logic works for any talk video). sherpa paraformer-en emits NO word timestamps
-   (`res.words==[]`, `timestamps==None`) — hence the proportional split; VAD gives true audio times
-   (better than YouTube auto-caption text, which drifts +2-3.5s — see lessons).
-   UNITS PITFALL: VAD loop time is `i*hop/sr` SECONDS — multiplying again by sr slices empty arrays
-   and the whole cue list silently collapses to 0 (cost a debug session).
+1. **Audio + segmentation (this box, sherpa Tencent VAD — VERIFIED 2026-08-28, Moltbook v2)**:
+   `ffmpeg -i in.mp4 -ar 16000 -ac 1 out.wav`; then **TenVad** via
+   `sherpa_onnx.VoiceActivityDetector` (model `ten-vad.onnx` from the k2-fsa asr-models
+   release — ~332KB, direct github download works; Ali keeps a copy). Config:
+   window_size=768, threshold=0.5, min_silence=0.4, min_speech=0.25, max_speech=20;
+   feed 768-sample windows, drain `vad.front` (segment `.start` is in SAMPLES;
+   end = start + len(.samples)). TenVad yields speech boundaries with TRUE audio times
+   and ~97% coverage (vs ~92% for the old energy-VAD fallback). Cap runs at 16s
+   (split at deepest internal silence), decode EACH RUN with sherpa-onnx paraformer-en
+   (`~/.hermes/models/sherpa-onnx-paraformer-en-2023-09-16`); CRITICAL: decode LONG
+   runs — on 1-3s blips paraformer hallucinates fragmentary text. Split each run's
+   words into ≤9-word cues with `time = start + dur*(word_idx/len(words))`.
+   WHY VAD AT ALL: paraformer-en emits NO word timestamps (res.words==[], timestamps==None)
+   — segment timing MUST come from the VAD. script: `scripts/transcribe_tenvad.py`.
+   UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr
+   exactly once (multiplying twice silently collapses the cue list to 0).
 2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of 60 lines,
    prompt "ID<TAB>English" → "ID<TAB>Persian", concise spoken style, ≤~70 chars, keep proper
    nouns (Moltbook, agent, AI), نیمفاصله. write_file REFUSES `N|text` lines (looks like read_file
