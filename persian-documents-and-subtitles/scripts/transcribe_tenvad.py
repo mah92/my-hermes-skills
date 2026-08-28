@@ -4,13 +4,13 @@ TenVad gives speech segments WITH start/end samples (the paraformer model emits
 NO word timestamps). Decode each long segment, split into <=9-word cues
 proportionally. Usage: python transcribe_tenvad.py <video> <outdir> [ten_vad.onnx]
 TenVad model: https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/ten-vad.onnx
-(direct download works; also /home/oem/Basir/sherpa-onnx has the sources)."""
+(direct download from the k2-fsa sherpa-onnx asr-models release works)."""
 import json, os, subprocess, sys, time, wave
 import numpy as np
 import sherpa_onnx
 
 SRC, WS = sys.argv[1], sys.argv[2]
-TENVAD = sys.argv[3] if len(sys.argv) > 3 else "/home/oem/.cache/sherpa/ten-vad.onnx"
+TENVAD = sys.argv[3] if len(sys.argv) > 3 else os.path.expanduser("~/.cache/sherpa/ten-vad.onnx")
 os.makedirs(WS, exist_ok=True)
 WAV = f"{WS}/audio_16k.wav"
 

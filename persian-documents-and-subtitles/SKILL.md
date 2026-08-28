@@ -1,15 +1,16 @@
 ---
-name: persian-documents
-description: "Persian/Farsi docs: DOCX (python-docx), PPTX, PDF (WeasyPrint/pymupdf), Excel, burned-in subtitles."
-version: 3.0.0
+name: persian-documents-and-subtitles
+description: "Persian/Farsi docs (DOCX/PPTX/PDF/Excel) + video film subtitles to Persian (burned-in/SRT)."
+version: 3.1.0
 category: productivity
 ---
 
-# Persian Document Creation
+# Persian Document Creation & Film Subtitles
 
 Create Persian (Farsi) documents and media across formats with proper RTL, fonts, and layout.
 Union of lessons from Ali's boxes (local 22.04 + VPS) — every recipe below was VERIFIED on a
-real job and survived user feedback rounds.
+real job and survived user feedback rounds. PORTABLE: no dependency on any user's folder
+layout — only `hermes_files` (the shared model store) and standard/`$HOME` locations are assumed.
 
 ## FONTS
 
@@ -21,18 +22,20 @@ real job and survived user feedback rounds.
 - For DOCX/PPTX the font is only STORED as a name (`B Nazanin`, `B Titr`, `Calibri`) — no local
   install needed; the user's Word/PowerPoint renders it.
 - Fallback for anything: Tahoma. Vazirmatn/vazir = cleanest for PDFs + subtitles.
+- Discover a usable Persian font with `fc-list :lang=fa` (standard fontconfig path); if the box
+  has none, install Vazirmatn once.
 
 ## Word (DOCX) — python-docx with explicit OOXML (VERIFIED)
 
 `npm docx` garbles Persian — do NOT use it. `python-docx` works IF you set the OOXML RTL
-attributes explicitly (paragraph `w:bidi` alone is NOT enough — that was the old local-skill
-claim that python-docx "corrupts"; the run-level recipe below is the verified fix):
+attributes explicitly (paragraph `w:bidi` alone is NOT enough — that was the old claim that
+python-docx "corrupts"; the run-level recipe below is the verified fix):
 
 ```python
 from docx import Document
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
-from docx.shared import Cm
+from docx.shared import Cm, Pt
 
 doc = Document()
 sec = doc.sections[0]                    # A4 portrait
@@ -40,7 +43,7 @@ sec.page_width, sec.page_height = Cm(21), Cm(29.7)
 sec.left_margin = sec.right_margin = Cm(2.2)
 sec.top_margin = sec.bottom_margin = Cm(2.2)
 
-def rtl_paragraph(doc, text, font="B Nazanin", size=13, align_right=True):
+def rtl_paragraph(doc, text, font="B Nazanin", size=13):
     p = doc.add_paragraph()
     pPr = p._p.get_or_add_pPr()
     bidi = OxmlElement("w:bidi"); bidi.set(qn("w:val"), "1"); pPr.append(bidi)  # RTL paragraph
@@ -87,10 +90,9 @@ Rules: English runs → `a:latin Calibri`; Persian → `a:cs B Nazanin`; titles 
 `a:cs B Titr`; `run.font.name` sets ONLY `a:latin` — Persian still breaks without `a:cs`.
 Persian fonts LACK glyphs for ←→≤≥× — replace with words (تا، حداکثر، حداقل) or boxes appear.
 Appending slides to an existing deck: replicate the deck's native theme (read existing shapes'
-`srgbClr` fills, e.g. navy 0A1F33 / card 143A63 / gold C9A227 / text EDF4FB).
-Editing an EXISTING deck = deterministic FULL REBUILD, never incremental insert/move
-(add_slide + sldIdLst.remove corrupts the package: duplicated slideN.xml, dropped slides).
-Rebuild: deepcopy kept `spTree`, match by TITLE with a ZWNJ-tolerant key
+`srgbClr` fills). Editing an EXISTING deck = deterministic FULL REBUILD, never incremental
+insert/move (add_slide + sldIdLst.remove corrupts the package: duplicated slideN.xml, dropped
+slides). Rebuild: deepcopy kept `spTree`, match by TITLE with a ZWNJ-tolerant key
 (`norm(s)=s.replace('\u200c','').replace(' ','')`), build a fresh Presentation, strip default
 children, append shapes; do NOT invent missing content — rebuild from verified evidence.
 Verify after EVERY build: slide count, dup titles==0, empty slides==0, no w:rFonts remnants,
@@ -133,9 +135,9 @@ Compile `xelatex -interaction=nonstopmode file.tex` (template: `templates/persia
 2. Redact only TEXT: `page.add_redact_annot(Rect(bbox), fill=(1,1,1))` + `apply_redactions()` — images/vectors SURVIVE.
 3. Shape Persian BEFORE inserting: `get_display(arabic_reshaper.reshape(txt))` (pip arabic-reshaper + python-bidi); embed a Persian TTF via `pymupdf.Font(fontfile=VAZIR)` + `fontname="F0", fontfile=...` ("F0" placeholder name required for embedded TTFs).
 4. **Uniform font sizes — never per-line shrink** (user: «ریز و درشت شدن فونتها»). Body 10.6 / heading 12 / title 18; `insert_textbox(rect, disp, fontsize=size, align=2)` wraps; shrink only 0.5 steps as last resort.
-5. Raster image labels (Chinese baked into screenshots) are NOT redactable: only add a white caption band + colored text if REAL whitespace exists; otherwise leave image untouched — an untranslated label beats a destroyed image.
+5. Raster image labels (foreign text baked into screenshots) are NOT redactable: only add a white caption band + colored text if REAL whitespace exists; otherwise leave image untouched — an untranslated label beats a destroyed image.
 6. QC: render pages at dpi=110 and vision-check via `qwen3-vl-32b-instruct` on avalai (base64 data URL) — no tofu/overlap, diagrams intact.
-7. Pitfall: this box has few Persian fonts — download Vazirmatn via proxy into `~/.fonts/`; keep short Latin spans (part numbers) untouched.
+7. Keep short Latin spans (part numbers) untouched.
 
 ## Excel (XLSX) — openpyxl rightToLeft
 ```python
@@ -149,54 +151,54 @@ ws['A1'].alignment = Alignment(horizontal='right')
 wb.save('output.xlsx')
 ```
 
-## Video → Persian burned-in (چسبیده) subtitles (VERIFIED 2026-08-28, Moltbook job)
+## Film video → Persian burned-in (چسبیده) subtitles (VERIFIED 2026-08-28, Moltbook job v1+v2)
 
-Pipeline: local audio → segment with timestamps → translate per segment → SRT/ASS → ffmpeg burn → vision QC → Bale.
+Pipeline: local audio → TenVad segmentation with timestamps → translate per segment → SRT/ASS → ffmpeg burn → vision QC → Bale.
 
-1. **Audio + segmentation (this box, sherpa Tencent VAD — VERIFIED 2026-08-28, Moltbook v2)**:
-   `ffmpeg -i in.mp4 -ar 16000 -ac 1 out.wav`; then **TenVad** via
-   `sherpa_onnx.VoiceActivityDetector` (model `ten-vad.onnx` from the k2-fsa asr-models
-   release — ~332KB, direct github download works; Ali keeps a copy). Config:
-   window_size=768, threshold=0.5, min_silence=0.4, min_speech=0.25, max_speech=20;
-   feed 768-sample windows, drain `vad.front` (segment `.start` is in SAMPLES;
-   end = start + len(.samples)). TenVad yields speech boundaries with TRUE audio times
-   and ~97% coverage (vs ~92% for the old energy-VAD fallback). Cap runs at 16s
-   (split at deepest internal silence), decode EACH RUN with sherpa-onnx paraformer-en
-   (`~/.hermes/models/sherpa-onnx-paraformer-en-2023-09-16`); CRITICAL: decode LONG
-   runs — on 1-3s blips paraformer hallucinates fragmentary text. Split each run's
-   words into ≤9-word cues with `time = start + dur*(word_idx/len(words))`.
-   WHY VAD AT ALL: paraformer-en emits NO word timestamps (res.words==[], timestamps==None)
-   — segment timing MUST come from the VAD. script: `scripts/transcribe_tenvad.py`.
-   UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr
-   exactly once (multiplying twice silently collapses the cue list to 0).
+1. **Audio + segmentation (sherpa Tencent VAD — VERIFIED)**: `ffmpeg -i in.mp4 -ar 16000 -ac 1 out.wav`;
+   then **TenVad** via `sherpa_onnx.VoiceActivityDetector` (model `ten-vad.onnx` ~332KB from the
+   k2-fsa sherpa-onnx asr-models release, direct GitHub download works; keep a local copy under
+   `~/.cache/sherpa/`). Config: window_size=768, threshold=0.5, min_silence=0.4, min_speech=0.25,
+   max_speech=20; feed 768-sample windows, drain `vad.front` (segment `.start` is in SAMPLES;
+   end = start + len(.samples)). TenVad gives speech boundaries with TRUE audio times
+   (~97% coverage; energy-VAD fallback ~92%). Cap runs at 16s (split at deepest internal silence),
+   decode EACH RUN with sherpa-onnx paraformer-en from `hermes_files` (`~/.hermes/models/` mirror);
+   CRITICAL: decode LONG runs — on 1-3s blips paraformer hallucinates fragmentary text.
+   Split each run's words into ≤9-word cues with `time = start + dur*(word_idx/len(words))`.
+   WHY VAD AT ALL: paraformer-en emits NO word timestamps (res.words==[], timestamps==None) —
+   segment timing MUST come from the VAD. script: `scripts/transcribe_tenvad.py`.
+   UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr exactly
+   once (multiplying twice silently collapses the cue list to 0).
 2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of 60 lines,
    prompt "ID<TAB>English" → "ID<TAB>Persian", concise spoken style, ≤~70 chars, keep proper
    nouns (Moltbook, agent, AI), نیمفاصله. write_file REFUSES `N|text` lines (looks like read_file
-   output) → use TAB separator. Save progress as JSON {idx: fa} after every chunk (resume-safe).
-3. **Zero-overlap SRT/ASS** (Moltbook lesson: overlapping cues = libass stacks them = vertical jitter):
-   `end_i = min(end_i, next_start)` with min duration 0.6s. ASS header: PlayResX=640/PlayResY=360,
-   Alignment=2, MarginV=24, FontSize=19, Outline=1.5, Shadow=0.6, Bold=1, PrimaryColour=&H00FFFFFF,
-   OutlineColour=&H00141414, Encoding=1. **ASS Dialogue timestamps MUST be `H:MM:SS.CC` with
-   TWO-digit centiseconds — a 3-digit fraction (`00:00:00.330`) makes libass 0.15 reject the
-   ENTIRE track (silent: 0 px rendered, no error) — cost a debug session 2026-08-28.** SRT keeps
-   `,mmm` (3-digit ms, fine).
+   output) → use TAB separator. Save progress as JSON {idx: fa} after every chunk (resume-safe);
+   backfill misses in a second pass.
+3. **Zero-overlap SRT/ASS** (lesson: overlapping cues = libass stacks them = vertical jitter):
+   `end_i = min(end_i, next_start)` with min duration 0.6s. ASS header: PlayResX=video width,
+   PlayResY=video height, Alignment=2, MarginV=24, FontSize≈19@360p, Outline=1.5, Shadow=0.6,
+   Bold=1, PrimaryColour=&H00FFFFFF, OutlineColour=&H00141414, Encoding=1.
+   **ASS Dialogue timestamps MUST be `H:MM:SS.CC` with TWO-digit centiseconds — a 3-digit
+   fraction (`00:00:00.330`) makes libass 0.15 reject the ENTIRE track (silent: 0 px rendered,
+   no error!).** SRT keeps `,mmm` (3-digit ms, fine). script: `scripts/make_ass.py`.
    FONTS: fc-match resolving is NOT enough — on this box libass 0.15 renders **Nazli** only with
-   `fontsdir=/usr/share/fonts/truetype/farsiweb` (Amiri renders NOTHING through fontconfig);
-   DejaVu/Arial render but with UNJOINED Arabic forms. Nazli + fontsdir + harfbuzz = connected,
-   readable Persian. QC check: count bright pixels in the bottom band programmatically
-   (`np.frombuffer` gray >= 360x640) — 0 px = track rejected, ~100-300 px = rendering.
+   `fontsdir=` pointing at the font's directory (Amiri renders NOTHING through fontconfig);
+   DejaVu/Arial render but with UNJOINED Arabic forms. Pick a font with `fc-list :lang=fa` and
+   pass `fontsdir=<its dir>`; Nazli + harfbuzz = connected, readable Persian.
+   QC check: count bright pixels in the bottom band programmatically (gray frame → 0 px = track
+   rejected, ~100-300 px = rendering).
 4. **Burn** (cd into the file's dir, use relative paths — colon in absolute path breaks the filter):
    ```bash
    ffmpeg -y -i in.mp4 -vf "ass=fa.ass:fontsdir=/usr/share/fonts/truetype/farsiweb" -c:v libx264 -crf 21 -preset veryfast -c:a copy -movflags +faststart out.mp4
    ```
-   SRT alternative with styling: `subtitles=fa.srt:force_style='FontName=Amiri,FontSize=19,PrimaryColour=&H00FFFFFF,OutlineColour=&H00141414,Outline=1.5,Shadow=0.6,MarginV=24,Bold=1,Alignment=2'`
+   SRT alternative with styling: `subtitles=fa.srt:force_style='FontName=...,FontSize=19,PrimaryColour=&H00FFFFFF,OutlineColour=&H00141414,Outline=1.5,Shadow=0.6,MarginV=24,Bold=1,Alignment=2'`
    ASS force_style color format is `&HAABBGGRR` (NOT #RRGGBB); BorderStyle=4 = opaque box.
    Put `scale=` BEFORE `subtitles=` if scaling; `-ss` BEFORE `-i` when trimming. ~30MB for 21 min at 360p, CRF 21.
-5. **Vision QC**: `vision_analyze(local path)` FAILS on this box (aux vision model can't see local
+5. **Vision QC**: `vision_analyze(local path)` FAILS on Ali's box (aux vision model can't see local
    files) → call avalai directly, model `qwen3-vl-32b-instruct`, key `HERMES_CUSTOM_API_AVALAI_IR_API_KEY`
    (NOT DEEPSEEK_API_KEY → 401; DeepSeek avalai models are text-only), image = `data:image/png;base64,...`.
    Extract frames with `ffmpeg -ss T -i out.mp4 -frames:v 1 -q:v 2 f.png`. Confirm letters CONNECTED, no tofu.
-   Vision cannot judge sync — verify timing programmatically (cues from VAD are audio-true by construction).
+   Vision cannot judge sync — verify timing programmatically (cues from TenVad are audio-true by construction).
 6. **Deliver**: `sendDocument` mp4 (+srt/ass bonus) via `https://tapi.bale.ai/bot<TOKEN>/sendDocument`,
    chat_id = owner DM, token from `~/.hermes/.env` `BALE_BOT_TOKEN`; assert `ok==True`. ≤50MB ok.
    Write the sender to a FILE (an `&` inside a heredoc caption trips the shell guard).
@@ -206,27 +208,28 @@ Pipeline: local audio → segment with timestamps → translate per segment → 
    `end=next_start` without overlap-cleanup stacks them). Fix: merge same-start groups, `end_i=min(end_i, start_{i+1})`, explicit .ass.
 2. **Desync** = the caption TEXT timestamps themselves drift vs audio (measured vs official VTT:
    +0.16s@0s → +1.75s@56s → +2.1-3.6s@100s). Any SRT from web caption APIs inherits it. Real fix:
-   ASR the actual audio with VAD/word timing (our local sherpa+VAD route) — audio-true by construction.
-3. Tool state on this box: sherpa paraformer-en = no word timestamps; faster-whisper NOT installed
-   (owner ruled out the heavy 484MB/10-20min run — «نکن. سنگینه»; pre-cache once if ever needed);
-   yt-dlp direct YouTube = blocked (Connection reset) → tunnel via VPS socks5 (ssh -D), but
-   raw.githubusercontent / jsdelivr / hf.co / release-assets were ALSO unreachable through it — local
-   models + installed fonts only.
+   ASR the actual audio with VAD timing (local sherpa+TenVad route) — audio-true by construction.
+3. Tool state on the box: sherpa paraformer-en = no word timestamps; heavier ASR (faster-whisper)
+   may be ruled out by the owner as too heavy (484MB download / 10-20min CPU) — prefer the local
+   sherpa stack; propose heavy installs before running.
 4. USER PREFERENCE: cost/weight-conscious — do web_search + GitHub checks FIRST, install only the
-   lightest working tool, visually confirm BEFORE ≈100MB downloads / ≈10min CPU runs. Propose, don't run heavy.
+   lightest working tool, visually confirm BEFORE ≈100MB downloads / ≈10min CPU runs.
 
 ### Related skills found on the web (2026-08-28)
 - `Jaqen00/Skills` → `subtitle-burn` (github.com/Jaqen00/Skills): ffmpeg/libass burn, width-based
-  font sizing, height-based margins, normalize-overlap step, `python cli.py burn --video-file ... --subtitle-file ... --output ...`.
+  font sizing, height-based margins, normalize-overlap step.
 - `SkillsMP` `opensquilla/subtitle-burner` (skillsmp.com): SRT→MP4 single-pass burn, audio copy.
 - ffmpeg-micro.com "subtitles filter guide" (2026-05): force_style reference, escaping traps
   (colons in paths, quotes in font names, UTF-8), BorderStyle=4 box mode, filter-order rules.
 
 ## Long foreign-language text → Persian → RTL docx → Bale (VERIFIED 2026-08-26)
-1. Fetch: `web_extract` often blocked for CN/JP → `curl -skL -x socks5h://127.0.0.1:1080 -A 'Mozilla/5.0'`; `-k` REQUIRED behind own proxy (else exit 97).
+1. Fetch: `web_extract` often blocked for CN/JP → `curl -skL -A 'Mozilla/5.0'` (add proxy if the
+   host needs one); `-k` REQUIRED behind an own proxy (else exit 97).
 2. Strip script/style/tags + `html.unescape`; cut title→footer. note.com EN = AI translation of Chinese original — say so honestly.
-3. Chunk translate: ~7,300-7,500-char chunks on paragraph boundaries; ONE chunk per turn → `tr2/tr_NN.txt`; MEANING-based natural Persian (not word-for-word — v1 rejected: «ترجمه فارسیات خیلی ضعیفه»), نیمفاصله everywhere.
-4. RTL docx via hermes venv python-docx (`/home/oem/.hermes/hermes-agent/venv/bin/python3`): A4, margins 2.2cm, w:bidi paragraphs, CS fonts: fa `B Nazanin`, zh `SimSun`, en `Calibri`. Font names stored only.
+3. Chunk translate: ~7,300-7,500-char chunks on paragraph boundaries; ONE chunk per turn; MEANING-based
+   natural Persian (not word-for-word — v1 rejected: «ترجمه فارسیات خیلی ضعیفه»), نیمفاصله everywhere.
+4. RTL docx via python-docx (use the agent's own venv python — e.g. `$HOME/.hermes/hermes-agent/venv/bin/python3`):
+   A4, margins 2.2cm, w:bidi paragraphs, CS fonts: fa `B Nazanin`, zh `SimSun`, en `Calibri`. Font names stored only.
 5. Deliver each file via Bale sendDocument; expect a rewrite round — keep v1 files until v2 accepted.
 
 ## Iranian Academic Paper Structure
@@ -241,4 +244,4 @@ Pipeline: local audio → segment with timestamps → translate per segment → 
 | PowerPoint | python-pptx + a:latin/a:ea/a:cs per run; full-rebuild edits |
 | Excel | openpyxl + rightToLeft |
 | Academic PDF | LaTeX + XePersian |
-| Video subtitles | sherpa VAD+paraformer → LLM FA → ffmpeg libass burn |
+| Film subtitles | sherpa TenVad+paraformer → LLM FA → ffmpeg libass burn |
