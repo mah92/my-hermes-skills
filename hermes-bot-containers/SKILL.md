@@ -1,7 +1,7 @@
 ---
 name: hermes-bot-containers
 description: "Extra Hermes bot profiles as isolated Docker containers."
-version: 2.0.0
+version: 2.0.1
 author: Ali Sani
 license: MIT
 platforms: [linux]
@@ -59,7 +59,8 @@ unchanged inside the container and produce audio/transcripts.
   [--compose-file ...] [--no-start]
 ```
 
-Remove a bot (container + profile + workspace + compose service): `scripts/rm-bot.sh <name>`.
+Remove a bot (container + compose service + profile + workspace, escalating to sudo
+for root-owned mountpoint leftovers): `scripts/rm-bot.sh <name>`.
 
 See the script header for all options. The script does: profile dirs + workspace →
 .env copied from main (Bale token/user swapped, secrets stripped if present) → skills rsync as
@@ -97,6 +98,9 @@ compose file — only in the profile `.env` (mode 600).
 ## Manual steps (same as the script)
 
 1. **Profile**: `mkdir -p ~/.hermes/profiles/<name>` (or `hermes profile create <name>`).
+   Also pre-create `~/.hermes/profiles/<name>/hermes-agent/venv` BEFORE the first
+   `up` — otherwise dockerd creates those nested ro-venv mountpoint dirs as root
+   (root-owned leftovers that plain rm cannot remove; see pitfall 18).
 2. **.env**: copy main `.env`; swap `BALE_BOT_TOKEN`, `BALE_HOME_CHANNEL`,
    `BALE_ALLOWED_USERS`/`CHATS` (owner + any extra admins, explicitly); scrub secrets:
    `SUDO_PASSWORD`, `BROWSERBASE_*`, `EXA_API_KEY`, `PARALLEL_API_KEY`, `FAL_KEY`,
@@ -225,6 +229,7 @@ grep "Connected as" /home/oem/.hermes/profiles/<name>/logs/agent.log | tail -1  
 15. **venv-ai is container-ABI-specific**: creating it on the host breaks in-container (host python 3.11 vs image 3.13 → `bin/python` symlink dangles). Create it INSIDE the container (`docker exec -u hermes hermes-<name> python3 -m venv ~/.hermes/venv-ai`). If PyPI is unreachable in-container, download cp313 wheels on the host via the socks proxy and install offline: `pip download "mcp==1.28.1" --only-binary=:all: --platform manylinux2014_x86_64 --python-version 3.13 --abi cp313 --implementation cp -d wheels/`, copy wheels to the bot workspace (rw mount), then `pip install --no-index --find-links <workspace>/_wheels mcp`.
 16. **Boot warning "Memory provider 'holographic' loaded but no provider instance found"** after such a copy is a side effect of the resumed-session attach, NOT a broken provider — verify with `docker exec ... python -c "from plugins.memory import load_memory_provider; print(load_memory_provider('holographic'))"` (returns an instance). After closing open sessions the warning disappears on the next boot.
 17. **add-bot.sh copies main's .env wholesale (line 82)** — it swaps the token/user lists but did NOT normalize `BALE_ALLOW_ALL_USERS` / `GATEWAY_ALLOW_ALL_USERS`, so main's `true` (or the `ture` typo) propagated to every bot profile, silently defeating the per-user allowlists the script carefully writes. Fixed in the script (they are forced to `false`); ALWAYS re-audit existing profiles: `grep -HnE "^(BALE|GATEWAY)_ALLOW_ALL_USERS" ~/.hermes/.env ~/.hermes/profiles/*/.env | grep -v "=false"` → must be empty, then `docker restart hermes-<name>`.
+18. **Root-owned `hermes-agent/venv` leftover in the profile**: at first `docker compose up`, dockerd creates the NESTED ro venv mount's target dirs (`hermes-agent/venv`) as root inside the profile — plain `rm -rf` fails there, and the old rm-bot.sh (profile-removal before compose, `set -e`) aborted and left the compose service behind (hit 2026-08 on jafari). FIXED both ways: (a) add-bot.sh pre-creates `$PROFILE_DIR/hermes-agent/venv` as the owner so nothing root-owned ever appears (verified: zero root files after boot); (b) rm-bot.sh escalates: plain rm → `sudo -n` → `SUDO_PASSWORD` read from the MAIN `.env` via `grep | cut` → prints the manual command. NEVER `source` the main .env inside the script: its command substitutions execute and fail under `set -e` (stt.py on a ro path → abort exit 126, exactly what rm-bot.sh did before the fix). Pre-existing profiles (marziye, zeinab-hossein) still carry the root-owned dirs; the fixed rm-bot.sh removes them via the sudo ladder.
 
 ## Common ops
 

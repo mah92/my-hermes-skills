@@ -76,6 +76,11 @@ fi
 
 echo "==> 1/7 creating profile dirs"
 mkdir -p "$PROFILE_DIR" "$WS_DIR"
+# Pre-create the NESTED bind-mount target (hermes-agent/venv, ro venv mount).
+# If it doesn't exist, dockerd creates the intermediate dirs as ROOT inside the
+# profile at first `up` — leaving root-owned leftovers that plain rm can't
+# remove (rm-bot.sh now handles them, but never create them in the first place).
+mkdir -p "$PROFILE_DIR/hermes-agent/venv"
 echo "This workspace belongs to the Hermes bot profile '$NAME' ($([[ -n "$BALE_USER" ]] && echo "Bale user $BALE_USER"))." > "$WS_DIR/README.md"
 
 echo "==> 2/7 .env (copied from main, Bale token/user swapped, secrets stripped)"
