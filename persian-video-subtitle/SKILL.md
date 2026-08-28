@@ -1,7 +1,7 @@
 ---
-name: persian-documents-and-subtitles
-description: "Persian/Farsi docs (DOCX/PPTX/PDF/Excel) + video film subtitles to Persian (burned-in/SRT)."
-version: 3.1.0
+name: persian-video-subtitle
+description: "Persian video subtitles (burned-in/SRT) + Farsi docs: DOCX/PPTX/PDF/Excel. RTL, fonts."
+version: 3.2.0
 category: productivity
 ---
 
