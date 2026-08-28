@@ -169,7 +169,10 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    segment timing MUST come from the VAD. script: `scripts/transcribe_tenvad.py`.
    CONTAINERS (hermes-bot-containers): keep a model copy in the shared store at
    `hermes_files/sherpa-vad/ten-vad.onnx` (ro-mounted in every bot container) and pass its path
-   as argv[3] — the `~/.cache` default is not visible inside containers. Verified 2026-08-28 in
+   as argv[3] — the `~/.cache` default is not visible inside containers. FONTS in containers:
+   `/usr/share/fonts/truetype/farsiweb` is host-only — copy `nazli.ttf` (and `titr.ttf`) to
+   `hermes_files/fonts/` and burn with `fontsdir=/home/oem/hermes_files/fonts`.
+   Verified 2026-08-28 in
    hermes-marziye: full pipeline + skills list (image venv `/opt/hermes/.venv/bin/hermes skills
    list`) shows the skill enabled. NOTE: the mounted HOST hermes-agent venv's `hermes` CLI fails
    to import hermes_cli inside containers (system-site-packages dependency) — use the image's
