@@ -1,7 +1,7 @@
 ---
 name: hermes-bot-containers
 description: "Extra Hermes bot profiles as isolated Docker containers."
-version: 2.1.0
+version: 2.1.1
 author: Ali Sani
 license: MIT
 platforms: [linux]
@@ -162,7 +162,10 @@ compose file — only in the profile `.env` (mode 600).
      first boot (writes `config.yaml.bak`/`.env.bak`) — expected, not a bug.
 6. **Compose service** (appended by the script; `network_mode: host` for localhost
    MCP: Firecrawl :3002, comfy-flux). NOTE: the generated volume set includes NO
-   Basir and NO miniconda — hermes_files + venv + uv + locale/i18n + workspace only:
+   Basir and NO miniconda — hermes_files + venv + uv + locale/i18n + workspace only.
+   The container clock matches the host: `TZ` from the host timezone + host
+   `/etc/localtime` mounted ro (without it the container logs UTC and "Connected
+   as" timestamps look hours off on non-UTC hosts):
 
 ```yaml
   <name>:
@@ -182,6 +185,7 @@ compose file — only in the profile `.env` (mode 600).
       - HERMES_LAZY_INSTALL_TARGET=/home/oem/.hermes/lazy-packages
       - API_SERVER_ENABLED=false
       - LD_LIBRARY_PATH=/home/oem/hermes_files/tts-libs
+      - TZ=Asia/Tehran            # host timezone — container clock must match host
     volumes:
       - /home/oem/.hermes/profiles/<name>:/home/oem/.hermes
       - /home/oem/hermes_files:/home/oem/hermes_files:ro
@@ -189,6 +193,7 @@ compose file — only in the profile `.env` (mode 600).
       - /home/oem/.local/share/uv:/home/oem/.local/share/uv:ro
       - /usr/lib/locale:/usr/lib/locale:ro
       - /usr/share/i18n:/usr/share/i18n:ro
+      - /etc/localtime:/etc/localtime:ro
       - /home/oem/workspaces/<name>:/home/oem/workspaces/<name>
     command: ["gateway", "run"]
     mem_limit: 4g
@@ -212,6 +217,8 @@ compose file — only in the profile `.env` (mode 600).
 ## Verification checklist (run `scripts/verify-bot.sh <name>` on the host)
 
 ```bash
+date        # host time
+docker exec -u hermes hermes-<name> bash -lc 'date'   # must show the SAME local time/TZ (UTC skew = missing TZ env)
 docker exec -u hermes hermes-<name> bash -lc 'echo $HOME $HERMES_HOME'   # /home/oem /home/oem/.hermes
 docker exec -u hermes hermes-<name> bash -lc 'ls /home/oem/.hermes/models/'   # shared EN store, ro
 docker exec -u hermes hermes-<name> bash -lc 'apt-get install -y sl 2>&1 | tail -1'      # must fail
@@ -276,6 +283,12 @@ grep "Connected as" /home/oem/.hermes/profiles/<name>/logs/agent.log | tail -1  
     Note: the ONNX model mirrors (hermes-persian-* / sherpa-onnx-en-stt) are
     gitignored by design — they exist ONLY in hermes_files and its tarballs, never
     in git. A store rebuild must re-copy them from the backup, not from a repo.
+20. **Container clock skews to UTC**: without `TZ` + the `/etc/localtime` ro mount
+    the container logs in UTC — on Iran hosts that is a 3.5h offset, so "Connected
+    as" lines and cron timestamps look hours off (confused a 2026-08 rebuild
+    check: the bot HAD connected on time). The add-bot.sh compose block now sets
+    `TZ` from the host and mounts localtime; `verify-bot.sh` prints host vs
+    container time side by side.
 
 ## Common ops
 

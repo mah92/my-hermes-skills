@@ -10,8 +10,10 @@ P="$H/.hermes/profiles/$NAME"
 FAIL=0
 
 echo "==> 1/3 env + mounts (inside container)"
+echo "host time: $(date '+%F %T %Z')"
 docker exec -u hermes "$C" bash -lc '
   echo "HOME=$HOME HERMES_HOME=$HERMES_HOME"
+  echo "container time: $(date "+%F %T %Z")   (TZ=$TZ)"
   echo "models -> $(readlink ~/.hermes/models)"
   ls ~/.hermes/models >/dev/null 2>&1 && echo "EN store visible OK"
   if [ -w /home/oem/hermes_files ]; then echo "RO-MOUNT-FAIL: hermes_files writable!"; else echo "hermes_files ro OK"; fi

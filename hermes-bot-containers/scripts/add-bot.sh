@@ -223,9 +223,13 @@ print(f"  wrote {cf}")
 PY
 
 echo "==> 5/7 compose service block (path-mirror mounts — profile at /home/oem/.hermes)"
-python3 - "$NAME" "$COMPOSE_FILE" "$PROFILE_DIR" "$WS_DIR" "$HOST_HOME" <<'PY'
+# Container clock MUST match the host: pass the host timezone as TZ and bind-mount
+# the host /etc/localtime ro. Without it the container logs in UTC (e.g. Iran
+# +03:30 hosts show a 3.5h skew) and "Connected as" timestamps look wrong.
+TZ_VALUE="$(cat /etc/timezone 2>/dev/null || timedatectl show -p Timezone --value 2>/dev/null || date +%Z)"
+python3 - "$NAME" "$COMPOSE_FILE" "$PROFILE_DIR" "$WS_DIR" "$HOST_HOME" "$TZ_VALUE" <<'PY'
 import sys, os, yaml
-name, cf, prof_dir, ws_dir, hh = sys.argv[1:6]
+name, cf, prof_dir, ws_dir, hh, tz = sys.argv[1:7]
 # the compose dir may not exist on this host (e.g. remote VPS) - create it
 os.makedirs(os.path.dirname(cf), exist_ok=True)
 doc = yaml.safe_load(open(cf)) if (os.path.exists(cf) and open(cf).read().strip()) else {"services": {}}
@@ -246,6 +250,7 @@ doc["services"][name] = {
         f"HERMES_LAZY_INSTALL_TARGET={hh}/.hermes/lazy-packages",
         "API_SERVER_ENABLED=false",
         "LD_LIBRARY_PATH=/home/oem/hermes_files/tts-libs",
+        f"TZ={tz}",
     ],
     "volumes": [
         f"{prof_dir}:/home/oem/.hermes",
@@ -254,6 +259,7 @@ doc["services"][name] = {
         f"{hh}/.local/share/uv:/home/oem/.local/share/uv:ro",
         "/usr/lib/locale:/usr/lib/locale:ro",
         "/usr/share/i18n:/usr/share/i18n:ro",
+        "/etc/localtime:/etc/localtime:ro",
         f"{ws_dir}:/home/oem/workspaces/{name}",
     ],
     "command": ["gateway", "run"],
