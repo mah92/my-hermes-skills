@@ -5,9 +5,12 @@
 #
 # DESIGN: "path mirror" — inside the container every path matches the host:
 #   HOME=/home/oem, HERMES_HOME=/home/oem/.hermes (profile dir mounted there),
-#   miniconda/hermes_files/Basir/workspace mounted at their host paths (ro).
+#   hermes_files/venv/uv/workspace mounted at their host paths (ro/rw).
+#   Basir is the MAIN system's dev tree and is NEVER mounted into containers —
+#   the whole TTS runtime (daemon, libs, espeak-ng-data) lives in hermes_files.
 # So the MAIN system's .env + config.yaml work VERBATIM after the single
-# Bale-token/user substitution — no in-container path rewriting ever needed.
+# Bale-token/user substitution and the TTS env normalization (MATCHA_TTS_BIN /
+# ESPEAK_DATA -> hermes_files) — no in-container path rewriting ever needed.
 #
 # USAGE:
 #   ./add-bot.sh <name> --token 123:ABC... --user <OWNER_ID> [--admins <ID1,ID2>]
@@ -107,6 +110,18 @@ for k in SUDO_PASSWORD BROWSERBASE_API_KEY BROWSERBASE_PROJECT_ID BROWSERBASE_PR
 done
 # shellcheck disable=SC2016
 sed -i 's|^HERMES_LOCAL_STT_COMMAND=.*|HERMES_LOCAL_STT_COMMAND='"$HOST_HOME"'/.hermes/hermes-agent/venv/bin/python '"$HOST_HOME"'/.hermes/skills/hermes-persian-stt/scripts/stt.py --quiet|' "$PROFILE_DIR/.env"
+# TTS envs MUST point INSIDE the mounted hermes_files store (the shared ro copy
+# of the daemon + libs + espeak-ng-data). Host values copied from the main .env
+# often point at /home/oem/Basir/... (mounted on the MAIN system only) and would
+# break TTS in the container. Normalize BOTH, append if the key is missing:
+for kv in \
+  "MATCHA_TTS_BIN=$HOST_HOME/hermes_files/matcha_tts_infer/build/MatchaTTSInfer" \
+  "ESPEAK_DATA=$HOST_HOME/hermes_files/tts-libs/espeak-ng-data"; do
+  key="${kv%%=*}"; val="${kv#*=}"
+  sed -i "s|^$key=.*|$key=$val|" "$PROFILE_DIR/.env"
+  grep -q "^$key=" "$PROFILE_DIR/.env" || echo "$key=$val" >> "$PROFILE_DIR/.env"
+done
+unset key val kv
 
 echo "==> 3/7 skills + plugins (real copies; models/ re-created as symlinks to the shared store)"
 if [[ "$SKIP_SKILLS" -eq 1 ]]; then
@@ -237,7 +252,6 @@ doc["services"][name] = {
         f"{hh}/hermes_files:/home/oem/hermes_files:ro",
         f"{hh}/.hermes/hermes-agent/venv:/home/oem/.hermes/hermes-agent/venv:ro",
         f"{hh}/.local/share/uv:/home/oem/.local/share/uv:ro",
-        f"{hh}/Basir:/home/oem/Basir:ro",
         "/usr/lib/locale:/usr/lib/locale:ro",
         "/usr/share/i18n:/usr/share/i18n:ro",
         f"{ws_dir}:/home/oem/workspaces/{name}",
