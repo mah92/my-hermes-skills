@@ -39,6 +39,11 @@ Chinese→Persian translation (LLM) → dual-track ASS → ffmpeg burn → QC �
    (paraformer hallucinates on 1-3s blips); cap runs 16s (split at deepest silence);
    split into ≤12-CHAR Chinese cues (reading pace ~3-4s; Chinese packs more meaning per char
    than English words).
+   **TenVad threshold matters for soft-spoken films**: default `threshold=0.5` MISSED ~36% of a
+   quiet emotional monologue (Chinese video 2: 151 cues / 64% coverage) — whole sentences near
+   the end vanished. Rerun with `threshold=0.35, min_silence=0.30, min_speech=0.20` → 170
+   cues / 92.8%, speech recovered to the final second. If the user reports «جملات جا افتاده»,
+   retune the VAD (not the translator).
 2. **Translate zh→fa**: `scripts/translate_zh_fa.py <ws>` → `fa_cues.json {idx: fa}`.
    Chunk=**40 lines + max_tokens=16384** (60-line chunks → empty responses), TAB separator,
    save-after-chunk resume, retries + raw-test-diagnosis if empties persist. `write_file`
