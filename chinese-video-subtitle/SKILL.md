@@ -15,10 +15,10 @@ on two Chinese videos (18min + 8.8min, 640x360) with hermes-agent. PORTABLE: onl
 Pipeline: ffmpeg audio → TenVad segmentation → paraformer-zh decode → Chinese cues →
 Chinese→Persian translation (LLM) → dual-track ASS → ffmpeg burn → QC → Bale.
 
-## Requirements (all pre-installed on Ali's box)
+## Requirements (install once)
 
 - **Hermes venv python** for ALL sherpa work: `$HOME/.hermes/hermes-agent/venv/bin/python`
-  (sherpa_onnx 1.13.4; conda vits2 has 1.12.11 — don't use it for this pipeline).
+  (sherpa_onnx 1.13.x must be importable; any other interpreter without it fails).
 - **ten-vad.onnx** (Tencent VAD): `hermes_files/sherpa-vad/ten-vad.onnx` (or
   `~/.cache/sherpa/ten-vad.onnx`; containers must pass the hermes_files path).
 - **paraformer-zh**: `hermes_files/sherpa-onnx-zh-stt/sherpa-onnx-paraformer-zh-2023-09-14/`
@@ -29,7 +29,7 @@ Chinese→Persian translation (LLM) → dual-track ASS → ffmpeg burn → QC �
   family name "Noto Sans CJK SC"); Persian = `Nazli`
   (`/usr/share/fonts/truetype/farsiweb/nazli.ttf`, needs `fontsdir=` — see pitfalls).
   Containers: copy both into `hermes_files/fonts/` (Nazli ttf + the CJK .ttc) and pass
-  `fontsdir=/home/oem/hermes_files/fonts`.
+  `fontsdir=$HOME/hermes_files/fonts`.
 
 ## Steps
 
@@ -65,11 +65,12 @@ Chinese→Persian translation (LLM) → dual-track ASS → ffmpeg burn → QC �
    ```
    `fontsdir` ADDS to fontconfig (Chinese via system Noto still resolves). Size: 18min/360p
    with two text lines = ~48MB at CRF 24 (CRF 21 gave 59MB — over Bale's 50MB; use CRF 24 for
-   ≥15min videos, CRF 21-23 for short ones). Containers: `fontsdir=/home/oem/hermes_files/fonts`.
+   ≥15min videos, CRF 21-23 for short ones). Containers: `fontsdir=$HOME/hermes_files/fonts`.
 5. **QC**: extract frames at cue midpoints (`ffmpeg -ss T -i out.mp4 -frames:v 1`); pixel-check
    TWO bands — Chinese upper band (~y H*0.55..H*0.8) AND Persian lower band (~y H*0.78..H*0.94);
    both must show text pixels. Vision: avalai `qwen3-vl-32b-instruct` with base64 data-URL
-   (reads Chinese natively; `vision_analyze(local)` fails on this box; DeepSeek avalai models
+   (reads Chinese natively; `vision_analyze(local)` fails when the aux vision model cannot
+   read local files — send the base64 data-URL via the API instead; DeepSeek avalai models
    are text-only) — confirm BOTH lines legible, letters joined for Persian, no tofu.
 6. **Deliver**: Bale `sendDocument` mp4 + `zh.srt` + `fa.srt` (tapi.bale.ai, token from
    `~/.hermes/.env`, chat from BALE_CHAT_ID). ≤50MB fits.
@@ -78,16 +79,17 @@ Chinese→Persian translation (LLM) → dual-track ASS → ffmpeg burn → QC �
 
 - **No CJK font = empty Chinese subtitles**: check `fc-list :lang=zh` first; libass renders
   NOTHING (not tofu) when the face is missing — pixel-check both bands.
-- **Nazli needs `fontsdir`** on this box (Amiri renders nothing; DejaVu renders unjoined) —
+- **Nazli needs `fontsdir`** on Ubuntu hosts (Amiri renders nothing; DejaVu renders unjoined) —
   always pass `fontsdir=/usr/share/fonts/truetype/farsiweb` (host) or
-  `/home/oem/hermes_files/fonts` (containers).
+  `$HOME/hermes_files/fonts` (containers).
 - **ASS centis**: `H:MM:SS.CC` two digits — a 3-digit fraction silently kills the whole track.
 - **The two SRTs share cue numbering** so `zh.srt`/`fa.srt` can be merged by a player; the
   burned dual.ass is the deliverable for chat apps.
 - **Long videos**: translation dominates wall-time (533 cues ≈ 8-12 min with 40-line chunks);
   run chunks in the background, keep progress JSON.
-- **VPS/remote**: model mirror via hermes_files keeps containers + remote consistent; scp skill
-  files + model dir once per host (GitHub unreachable from the VPS — bundle/scp).
+- **Remote/container sync**: keep the model mirror under hermes_files so containers and other
+  hosts stay consistent; scp skill files + model dir once per host (on restricted networks,
+  GitHub may be unreachable — bundle and scp instead of git-pulling).
 
 ## Scripts
 | Script | Purpose |

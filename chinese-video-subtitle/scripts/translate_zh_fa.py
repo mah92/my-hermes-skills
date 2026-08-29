@@ -2,7 +2,8 @@
 """Chinese->Persian chunked translation via avalai (deepseek-v4-flash).
 Reads segments.json (zh text per cue) -> writes fa_cues.json {idx: fa}.
 Chunk=40 lines + max_tokens=16384 (60-line chunks get empty responses on
-deepseek-v4-flash — verified host + marziye E2E). Resume-safe.
+deepseek-v4-flash — verified on the 2026-08-29 Chinese jobs and the 2026-08-28
+English container E2E). Resume-safe.
 Usage: python translate_zh_fa.py <ws>"""
 import json, os, sys, time, urllib.request
 

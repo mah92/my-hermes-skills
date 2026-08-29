@@ -19,8 +19,11 @@ for i, s in enumerate(segs):
     t = fa.get(str(i), "").strip()
     if not t: continue
     st, en = s["start"], s["end"]
-    if i + 1 < len(segs): en = min(en, segs[i + 1]["start"])
-    if en - st < 0.6: en = st + 0.6
+    if i + 1 < len(segs): en = min(en, segs[i + 1]["start"])   # zero overlap FIRST
+    if en - st < 0.6:
+        en = min(en, segs[i + 1]["start"] if i + 1 < len(segs) else st + 0.6, st + 1.2)
+    if en - st < 0.4:
+        continue
     cues.append((st, en, t))
 
 def ts(t):

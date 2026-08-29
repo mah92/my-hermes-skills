@@ -22,9 +22,12 @@ for i, s in enumerate(segs):
         continue
     st, en = s["start"], s["end"]
     if i + 1 < len(segs):
-        en = min(en, segs[i + 1]["start"])
+        en = min(en, segs[i + 1]["start"])      # zero overlap FIRST
     if en - st < 0.8:
-        en = st + 0.8
+        en = min(en, segs[i + 1]["start"] if i + 1 < len(segs) else st + 0.8,
+                 st + 1.6)                      # extend but NEVER past next start
+    if en - st < 0.5:
+        continue                                # too short even after extension
     cues.append((st, en, zh, fap))
 
 def ts(t):

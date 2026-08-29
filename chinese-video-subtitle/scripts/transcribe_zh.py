@@ -1,9 +1,12 @@
 #!/usr/bin/env python3
 """Chinese video -> segments.json with REAL audio times.
 RUN WITH THE HERMES VENV PYTHON: $HOME/.hermes/hermes-agent/venv/bin/python
-(sherpa_onnx 1.13.4 is installed there; conda vits2 has an older one — don't use it).
+(sherpa_onnx 1.13.x must be importable — any other interpreter without it fails).
 Tencent VAD (ten-vad.onnx) cuts speech; sherpa-onnx paraformer-zh (int8) decodes.
 Model: csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14 (hermes_files shared store).
+VAD tuning: use env TENVAD_THRESHOLD / TENVAD_MIN_SILENCE / TENVAD_MIN_SPEECH
+(soft-spoken films: threshold 0.35, min_silence 0.30, min_speech 0.20 — the 0.5
+default misses ~36% of quiet speech; verified 2026-08-29 Chinese job #2).
 Usage: python transcribe_zh.py <video> <outdir> [ten_vad.onnx] [model_dir]"""
 import json, os, subprocess, sys, time, wave
 import numpy as np
@@ -13,7 +16,7 @@ SRC, WS = sys.argv[1], sys.argv[2]
 TENVAD = sys.argv[3] if len(sys.argv) > 3 else os.path.expanduser("~/.cache/sherpa/ten-vad.onnx")
 MDIR = sys.argv[4] if len(sys.argv) > 4 else os.path.expanduser("~/.hermes/models/sherpa-onnx-paraformer-zh-2023-09-14")
 if not os.path.exists(os.path.join(MDIR, "model.int8.onnx")):
-    MDIR = "/home/oem/hermes_files/sherpa-onnx-zh-stt/sherpa-onnx-paraformer-zh-2023-09-14"
+    MDIR = os.path.join(os.path.expanduser("~/hermes_files"), "sherpa-onnx-zh-stt/sherpa-onnx-paraformer-zh-2023-09-14")
 os.makedirs(WS, exist_ok=True)
 WAV = f"{WS}/audio_16k.wav"
 
@@ -29,9 +32,9 @@ c = sherpa_onnx.VadModelConfig()
 c.sample_rate = sr
 c.ten_vad.model = TENVAD
 c.ten_vad.window_size = 768
-c.ten_vad.threshold = 0.5
-c.ten_vad.min_silence_duration = 0.4
-c.ten_vad.min_speech_duration = 0.25
+c.ten_vad.threshold = float(os.environ.get("TENVAD_THRESHOLD", 0.5))
+c.ten_vad.min_silence_duration = float(os.environ.get("TENVAD_MIN_SILENCE", 0.4))
+c.ten_vad.min_speech_duration = float(os.environ.get("TENVAD_MIN_SPEECH", 0.25))
 c.ten_vad.max_speech_duration = 20.0
 vad = sherpa_onnx.VoiceActivityDetector(c, 60)
 

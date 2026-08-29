@@ -8,7 +8,7 @@ category: productivity
 # Persian Document Creation & Film Subtitles
 
 Create Persian (Farsi) documents and media across formats with proper RTL, fonts, and layout.
-Union of lessons from Ali's boxes (local 22.04 + VPS) — every recipe below was VERIFIED on a
+Union of lessons from multiple deployments — every recipe below was VERIFIED on a
 real job and survived user feedback rounds. PORTABLE: no dependency on any user's folder
 layout — only `hermes_files` (the shared model store) and standard/`$HOME` locations are assumed.
 
@@ -96,7 +96,7 @@ slides). Rebuild: deepcopy kept `spTree`, match by TITLE with a ZWNJ-tolerant ke
 (`norm(s)=s.replace('\u200c','').replace(' ','')`), build a fresh Presentation, strip default
 children, append shapes; do NOT invent missing content — rebuild from verified evidence.
 Verify after EVERY build: slide count, dup titles==0, empty slides==0, no w:rFonts remnants,
-every run has a:latin+a:cs, canonical closing slide still LAST (this user checks: «چرا حذف کردی»).
+every run has a:latin+a:cs, canonical closing slide still LAST (operators check this: «چرا حذف کردی»).
 RTL/LTR normalization pass: per paragraph `pPr algn=r` (unless explicit ctr for stats),
 `rtl = 1 if has_persian else 0`; per textbox `a:bodyPr rtlCol`; per run lang fa-IR/en-US.
 English-only subtitle boxes → rtl=0 + right-aligned, NOT mirrored.
@@ -157,8 +157,9 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
 
 1. **Audio + segmentation (sherpa Tencent VAD — VERIFIED)**: `ffmpeg -i in.mp4 -ar 16000 -ac 1 out.wav`;
    **USE THE HERMES VENV PYTHON FOR EVERYTHING sherpa-related**:
-   `$HOME/.hermes/hermes-agent/venv/bin/python` — sherpa_onnx 1.13.4 is installed THERE (the
-   conda `vits2` env has an older 1.12.11; do NOT use it for this pipeline). This venv is also
+   `$HOME/.hermes/hermes-agent/venv/bin/python` — sherpa_onnx 1.13.x is installed in the hermes
+   venv; any other interpreter without sherpa_onnx 1.13.x fails (do NOT use it for this pipeline).
+   This venv is also
    ro-mounted into the bot containers at the same path, so the same command works in-container.
    Then **TenVad** via `sherpa_onnx.VoiceActivityDetector` (model `ten-vad.onnx` ~332KB from the
    k2-fsa sherpa-onnx asr-models release, direct GitHub download works; keep a local copy under
@@ -175,17 +176,18 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    `hermes_files/sherpa-vad/ten-vad.onnx` (ro-mounted in every bot container) and pass its path
    as argv[3] — the `~/.cache` default is not visible inside containers. FONTS in containers:
    `/usr/share/fonts/truetype/farsiweb` is host-only — copy `nazli.ttf` (and `titr.ttf`) to
-   `hermes_files/fonts/` and burn with `fontsdir=/home/oem/hermes_files/fonts`.
+   `hermes_files/fonts/` and burn with `fontsdir=$HOME/hermes_files/fonts`.
    Verified 2026-08-28 in
-   hermes-marziye: full pipeline + skills list (image venv `/opt/hermes/.venv/bin/hermes skills
-   list`) shows the skill enabled. NOTE: the mounted HOST hermes-agent venv's `hermes` CLI fails
-   to import hermes_cli inside containers (system-site-packages dependency) — use the image's
-   own `/opt/hermes/.venv/bin/hermes` for CLI checks.
+   a bot container: full pipeline + skills list via the container image's own venv
+   (e.g. the hermes-agent container image venv at `/opt/hermes/.venv/bin/hermes skills list`)
+   shows the skill enabled. NOTE: the mounted host hermes-agent venv's `hermes` CLI may fail to
+   import hermes_cli inside containers
+   (system-site-packages dependency) — use the image's own venv hermes for CLI checks.
    UNITS PITFALL: segment `.start` and the window index are SAMPLES — convert with /sr exactly
    once (multiplying twice silently collapses the cue list to 0).
 2. **Translate per segment** (LLM, api.avalai.ir + deepseek-v4-flash): chunks of **40 lines
    with `max_tokens=16384`** (60-line chunks got TRUNCATED/EMPTY responses on deepseek-v4-flash —
-   verified twice: 2026-08-28 on the host AND in the marziye container E2E; 40/16384 → 100%;
+   verified twice: 2026-08-28 on a host AND in a bot-container E2E; 40/16384 → 100%;
    a system hint «فقط خطوط ID<TAB>متن را برگردان، بدون توضیح» helps),
    prompt "ID<TAB>English" → "ID<TAB>Persian", concise spoken style, ≤~70 chars, keep proper
    nouns (Moltbook, agent, AI), نیمفاصله. write_file REFUSES `N|text` lines (looks like read_file
@@ -199,7 +201,7 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    **ASS Dialogue timestamps MUST be `H:MM:SS.CC` with TWO-digit centiseconds — a 3-digit
    fraction (`00:00:00.330`) makes libass 0.15 reject the ENTIRE track (silent: 0 px rendered,
    no error!).** SRT keeps `,mmm` (3-digit ms, fine). script: `scripts/make_ass.py`.
-   FONTS: fc-match resolving is NOT enough — on this box libass 0.15 renders **Nazli** only with
+   FONTS: fc-match resolving is NOT enough — on Ubuntu 22.04 libass 0.15 renders **Nazli** only with
    `fontsdir=` pointing at the font's directory (Amiri renders NOTHING through fontconfig);
    DejaVu/Arial render but with UNJOINED Arabic forms. Pick a font with `fc-list :lang=fa` and
    pass `fontsdir=<its dir>`; Nazli + harfbuzz = connected, readable Persian.
@@ -212,8 +214,8 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    SRT alternative with styling: `subtitles=fa.srt:force_style='FontName=...,FontSize=19,PrimaryColour=&H00FFFFFF,OutlineColour=&H00141414,Outline=1.5,Shadow=0.6,MarginV=24,Bold=1,Alignment=2'`
    ASS force_style color format is `&HAABBGGRR` (NOT #RRGGBB); BorderStyle=4 = opaque box.
    Put `scale=` BEFORE `subtitles=` if scaling; `-ss` BEFORE `-i` when trimming. ~30MB for 21 min at 360p, CRF 21.
-5. **Vision QC**: `vision_analyze(local path)` FAILS on Ali's box (aux vision model can't see local
-   files) → call avalai directly, model `qwen3-vl-32b-instruct`, key `HERMES_CUSTOM_API_AVALAI_IR_API_KEY`
+5. **Vision QC**: `vision_analyze(local path)` may fail when the aux vision model cannot read
+   local files → call avalai directly, model `qwen3-vl-32b-instruct`, key `HERMES_CUSTOM_API_AVALAI_IR_API_KEY`
    (NOT DEEPSEEK_API_KEY → 401; DeepSeek avalai models are text-only), image = `data:image/png;base64,...`.
    Extract frames with `ffmpeg -ss T -i out.mp4 -frames:v 1 -q:v 2 f.png`. Confirm letters CONNECTED, no tofu.
    Vision cannot judge sync — verify timing programmatically (cues from TenVad are audio-true by construction).
@@ -227,14 +229,14 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
 2. **Desync** = the caption TEXT timestamps themselves drift vs audio (measured vs official VTT:
    +0.16s@0s → +1.75s@56s → +2.1-3.6s@100s). Any SRT from web caption APIs inherits it. Real fix:
    ASR the actual audio with VAD timing (local sherpa+TenVad route) — audio-true by construction.
-3. Tool state on the box: sherpa paraformer-en = no word timestamps; heavier ASR (faster-whisper)
-   may be ruled out by the owner as too heavy (484MB download / 10-20min CPU) — prefer the local
-   sherpa stack; propose heavy installs before running.
+3. Tool state: sherpa paraformer-en = no word timestamps; heavier ASR options (faster-whisper)
+   may be ruled out by the operator as too heavy (484MB download / 10-20min CPU) — prefer the
+   lightweight local sherpa stack; propose heavy installs before running.
 4. USER PREFERENCE: cost/weight-conscious — do web_search + GitHub checks FIRST, install only the
    lightest working tool, visually confirm BEFORE ≈100MB downloads / ≈10min CPU runs.
-5. **marziye container E2E (2026-08-28, her own 17-min session) — problems SHE hit & solved,
-   now encoded here**: (a) translation: 60-line chunks → truncated/empty API responses; fix =
-   CHUNK=40 + max_tokens=16384 (100% success) — she diagnosed with ONE raw API test call first;
+5. **Bot-container E2E (2026-08-28, a bot's own 17-min agent session) — problems it hit &
+   solved, now encoded here**: (a) translation: 60-line chunks → truncated/empty API responses; fix =
+   CHUNK=40 + max_tokens=16384 (100% success) — diagnose with ONE raw API test call first;
    (b) STALE artifacts from earlier runs in the workspace (old segments.json / fa_cues.json /
    fa.srt / fa.ass) get misread as state — run each job in a FRESH output dir or delete the four
    files before starting; (c) QC negative control: frame from a known cue-GAP must show only

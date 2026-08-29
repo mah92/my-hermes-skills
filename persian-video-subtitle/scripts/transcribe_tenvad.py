@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Video -> English segments with REAL audio times (Tencent VAD + paraformer-en).
 RUN WITH THE HERMES VENV PYTHON: $HOME/.hermes/hermes-agent/venv/bin/python
-(sherpa_onnx 1.13.4 is installed there; conda vits2 has an older 1.12.11 — don't use it).
+(sherpa_onnx 1.13.x must be importable — any other interpreter without it fails).
 TenVad gives speech segments WITH start/end samples (the paraformer model emits
 NO word timestamps). Decode each long segment, split into <=9-word cues
 proportionally. Usage: python transcribe_tenvad.py <video> <outdir> [ten_vad.onnx]
@@ -68,6 +68,8 @@ for st, en in segs:
 work = [w for w in work if w[1] - w[0] >= 0.5]
 
 MDIR = os.path.expanduser("~/.hermes/models/sherpa-onnx-paraformer-en-2023-09-16")
+if not os.path.exists(os.path.join(MDIR, "model.int8.onnx")):
+    MDIR = os.path.join(os.path.expanduser("~/hermes_files"), "sherpa-onnx-en-stt", "sherpa-onnx-paraformer-en-2023-09-16")
 rec = sherpa_onnx.OfflineRecognizer.from_paraformer(
     paraformer=os.path.join(MDIR, "model.int8.onnx"),
     tokens=os.path.join(MDIR, "tokens.txt"), num_threads=4, sample_rate=16000)
