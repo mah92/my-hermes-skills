@@ -4,9 +4,10 @@ RUN WITH THE HERMES VENV PYTHON: $HOME/.hermes/hermes-agent/venv/bin/python
 (sherpa_onnx 1.13.x must be importable — any other interpreter without it fails).
 Tencent VAD (ten-vad.onnx) cuts speech; sherpa-onnx paraformer-zh (int8) decodes.
 Model: csukuangfj/sherpa-onnx-paraformer-zh-2023-09-14 (hermes_files shared store).
-VAD tuning: use env TENVAD_THRESHOLD / TENVAD_MIN_SILENCE / TENVAD_MIN_SPEECH
-(soft-spoken films: threshold 0.35, min_silence 0.30, min_speech 0.20 — the 0.5
-default misses ~36% of quiet speech; verified 2026-08-29 Chinese job #2).
+VAD tuning: use env TENVAD_THRESHOLD / TENVAD_MIN_SILENCE / TENVAD_MIN_SPEECH /
+TENVAD_MERGE_GAP (soft-spoken films: threshold=0.35, min_silence=0.40, min_speech=0.30,
+merge_gap=0.6 — the 0.5 threshold misses ~36% of quiet speech, verified 2026-08-29 Chinese
+job #2; keep min_silence >=0.4 and merge tiny gaps or the start feels «جابهجا»).
 Usage: python transcribe_zh.py <video> <outdir> [ten_vad.onnx] [model_dir]"""
 import json, os, subprocess, sys, time, wave
 import numpy as np
@@ -54,8 +55,18 @@ while not vad.empty():
     st = int(seg.start)
     segs.append([st / sr, (st + len(seg.samples)) / sr])
     vad.pop()
-segs = [g for g in segs if g[1] - g[0] >= 0.5]
-print(f"TenVad segments: {len(segs)}", flush=True)
+segs = [g for g in segs if g[1] - g[0] >= 0.35]
+# merge runs separated by tiny gaps (env TENVAD_MERGE_GAP, default 0.6s) — prevents
+# mid-sentence splits that make early subtitles feel «جابهجا» (verified 2026-08-29)
+MERGE = float(os.environ.get("TENVAD_MERGE_GAP", 0.6))
+merged = []
+for g in segs:
+    if merged and g[0] - merged[-1][1] <= MERGE:
+        merged[-1][1] = g[1]
+    else:
+        merged.append(g[:])
+segs = merged
+print(f"TenVad segments (after merge {MERGE}s): {len(segs)}", flush=True)
 
 # cap runs at 16s, split at deepest internal silence
 work = []
