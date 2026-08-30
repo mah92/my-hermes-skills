@@ -2,10 +2,14 @@
 # rm-bot.sh <name> — remove a containerized bot created by add-bot.sh.
 # Deletes: container, profile dir, workspace, and its compose service block.
 # Companion to the hermes-bot-containers skill.
+# IMPORTANT: this is for REMOVING a bot for good. NEVER run this during a
+# migration — migration recreates containers (docker compose up -d), it does
+# not delete them.
 set -euo pipefail
 
 NAME="${1:?usage: rm-bot.sh <name>}"
-COMPOSE_FILE="${COMPOSE_FILE:-/home/oem/profiles-containers/docker-compose.yaml}"
+H="${HOME:-/home/oem}"
+COMPOSE_FILE="${COMPOSE_FILE:-$H/profiles-containers/docker-compose.yaml}"
 [[ "$NAME" =~ ^[a-z0-9-]+$ ]] || { echo "Name must be lowercase [a-z0-9-]" >&2; exit 1; }
 
 echo "==> 1/3 removing container hermes-$NAME"
@@ -60,11 +64,11 @@ remove_tree() {
 # directly. NEVER `source` the whole .env under set -e: its command
 # substitutions execute and can fail (e.g. stt.py on a ro path -> 126 abort).
 if [ -n "${SUDO_PASSWORD:-}" ]; then :; else
-  SUDO_PASSWORD="$(grep -m1 '^SUDO_PASSWORD=' /home/oem/.hermes/.env 2>/dev/null | cut -d= -f2-)" || true
+  SUDO_PASSWORD="$(grep -m1 '^SUDO_PASSWORD=' "$H/.hermes/.env" 2>/dev/null | cut -d= -f2-)" || true
 fi
 LEFT=0
-remove_tree "/home/oem/.hermes/profiles/$NAME" "/home/oem/workspaces/$NAME"
-for p in "/home/oem/.hermes/profiles/$NAME" "/home/oem/workspaces/$NAME"; do
+remove_tree "$H/.hermes/profiles/$NAME" "$H/workspaces/$NAME"
+for p in "$H/.hermes/profiles/$NAME" "$H/workspaces/$NAME"; do
   if [ -e "$p" ] || [ -L "$p" ]; then echo "  LEFTOVER: $p"; LEFT=1; fi
 done
 if python3 - "$NAME" "$COMPOSE_FILE" <<'PY' | grep -q '^yes$'
