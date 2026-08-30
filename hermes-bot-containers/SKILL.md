@@ -57,11 +57,12 @@ everything — with no path rewriting:
 - Shared ro mounts at their host paths: `<HERMES_HOME>/hermes_files`,
   `<HOST_USER_HOME>/.local/share/uv`. The host hermes-agent venv mount is
   **TWO-MODE, auto-detected in add-bot.sh from the image tag**:
-  - **Plain image** (e.g. `:20260827`, deps NOT baked — current on Ali's box):
+  - **Plain image** (e.g. `:20260827`, deps NOT baked):
     mount `<HERMES_HOME>/hermes-agent/venv` ro; PRE-CREATE the mountpoint dir
     in the profile (else root-owned leftover, see pitfalls); STT/PYTHON_BIN
     point at the host venv (`<HERMES_HOME>/hermes-agent/venv/bin/python`).
-  - **Baked image** (e.g. `:20260830+`, deps baked into `/opt/hermes/.venv`):
+  - **Baked image** (e.g. `:20260830+`, deps baked into `/opt/hermes/.venv`;
+    pull from the VPS fleet via `docker save`/`load` when not built locally):
     NO venv mount; STT/PYTHON_BIN point at `/opt/hermes/.venv/bin/python`;
     no mountpoint dir to pre-create.
 - `<HOST_USER_HOME>/workspaces/<name>` mounted rw at the same host path

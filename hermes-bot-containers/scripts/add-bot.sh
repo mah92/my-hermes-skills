@@ -44,7 +44,9 @@ SKIP_SKILLS=0
 NO_START=0
 # Derived image = official image + passwordless sudo (+ optional baked deps).
 # Rebuild with: docker build -t nousresearch/hermes-agent-sudo:<TAG> <dir-with-Dockerfile>
-IMAGE="${HERMES_BOT_IMAGE:-nousresearch/hermes-agent-sudo:20260827}"
+# 20260830 = deps baked (docling/torch/pypdf...), pulled from the VPS fleet
+# (docker save/load). Change to whatever tag is built/pulled locally.
+IMAGE="${HERMES_BOT_IMAGE:-nousresearch/hermes-agent-sudo:20260830}"
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
