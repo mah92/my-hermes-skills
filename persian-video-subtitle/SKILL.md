@@ -207,6 +207,15 @@ Pipeline: local audio → TenVad segmentation with timestamps → translate per 
    pass `fontsdir=<its dir>`; Nazli + harfbuzz = connected, readable Persian.
    QC check: count bright pixels in the bottom band programmatically (gray frame → 0 px = track
    rejected, ~100-300 px = rendering).
+   **MIXED-SCRIPT RTL (VERIFIED 2026-08-31, user: «توی جملات ترکیبی انگلیسی-فارسی نمایش متن خراب
+   میشه، باید راستچین کنی»): lines that START with Latin (e.g. "LangGraph را از صفر بفهمید") get
+   LTR base direction in libass → Persian order breaks. Fix: wrap EVERY line containing Persian in
+   explicit bidi isolates RLI..PDI (`\u2067` + text + `\u2069`) when writing SRT/ASS. CRITICAL:
+   RLM/ALM (`\u200f`) does NOT work — libass 0.15 strips U+200E/U+200F before paragraph detection
+   (pixel-identical output, verified). RLI AND RLE both force RTL correctly in libass+ffmpeg; RLI
+   chosen (isolating; also honored by VLC/mpv/fribidi for the separate .srt). Verify by rendering
+   the offending line with/without wrap to PNGs and asking qwen3-vl «کلمه لاتین (LangGraph) کدوم
+   لبه است؟ LEFT یا RIGHT» — correct answer is RIGHT. `make_ass.py` does this automatically now.
 4. **Burn** (cd into the file's dir, use relative paths — colon in absolute path breaks the filter):
    ```bash
    ffmpeg -y -i in.mp4 -vf "ass=fa.ass:fontsdir=/usr/share/fonts/truetype/farsiweb" -c:v libx264 -crf 21 -preset veryfast -c:a copy -movflags +faststart out.mp4

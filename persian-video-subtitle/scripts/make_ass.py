@@ -3,16 +3,30 @@
 ASS times are H:MM:SS.CC (2-digit centis — 3-digit fraction poisons libass 0.15!).
 Zero overlap enforced. Style constants (FontSize 19, MarginV 24) are tuned for
 360p; for other resolutions scale: size=H*0.053, MarginV=H*0.067.
+MIXED-SCRIPT FIX (VERIFIED 2026-08-31): any line containing Persian gets wrapped
+in explicit bidi ISOLATES RLI...PDI (U+2067 .. U+2069). Without them, a line that
+STARTS with Latin (e.g. "LangGraph را از صفر بفهمید") gets LTR base direction and
+the Persian order breaks. RLM/ALM (U+200F) does NOT work — libass 0.15 strips
+U+200E/U+200F as bidi marks before paragraph detection (verified pixel-identical
+output). RLI and RLE both force RTL correctly in libass+ffmpeg; RLI chosen
+(isolating, no cross-line leakage; mirrors what fribidi/ICU honor).
 Usage: python make_ass.py <ws> <font> [width height]  (default 640 360)"""
-import json, sys
+import json, re, sys
 
 WS, FONT = sys.argv[1], sys.argv[2]
 W = int(sys.argv[3]) if len(sys.argv) > 3 else 640
 H = int(sys.argv[4]) if len(sys.argv) > 4 else 360
 FS = int(round(H * 0.053))     # ~19 @360p
 MV = int(round(H * 0.067))     # ~24 @360p
+RLI, PDI = "\u2067", "\u2069"
 segs = json.load(open(f"{WS}/segments.json", encoding="utf-8"))
 fa = json.load(open(f"{WS}/fa_cues.json", encoding="utf-8"))
+
+def wrap_rtl(t):
+    """Force RTL base direction for any line that contains Persian."""
+    if re.search(r"[\u0600-\u06FF]", t):
+        return RLI + t + PDI
+    return t
 
 cues = []
 for i, s in enumerate(segs):
@@ -37,6 +51,7 @@ def ts_ass(t):
 
 with open(f"{WS}/fa.srt", "w", encoding="utf-8") as f:
     for i, (st, en, t) in enumerate(cues, 1):
+        t = wrap_rtl(t)
         f.write(f"{i}\n{ts(st)} --> {ts(en)}\n{t}\n\n")
 
 with open(f"{WS}/fa.ass", "w", encoding="utf-8") as f:
@@ -55,6 +70,6 @@ Style: Default,{FONT},{FS},&H00FFFFFF,&H000000FF,&H00141414,&H64000000,1,0,0,0,1
 Format: Layer, Start, End, Style, Name, MarginL, MarginR, MarginV, Effect, Text
 """)
     for i, (st, en, t) in enumerate(cues):
-        t = t.replace("\n", " ").strip()
+        t = wrap_rtl(t).replace("\n", " ").strip()
         f.write(f"Dialogue: 0,{ts_ass(st)},{ts_ass(en)},Default,,0,0,0,,{t}\n")
 print(f"wrote {WS}/fa.srt ({len(cues)}) + fa.ass (font={FONT})")
