@@ -44,3 +44,9 @@ WORKDIR /home/sandbox
 # Keep it lean. Add a package only when a bot's skill actually needs it, and
 # remember that a runtime `pip install` inside the sandbox is lost with the
 # session: bake it here instead.
+#
+# Verify the result with a per-package loop, not one `command -v a b c`:
+#   docker run --rm --entrypoint bash <image> -c \
+#     'for p in ffmpeg pdftotext rg jq sqlite3; do printf "%-10s %s\n" $p "$(command -v $p || echo MISSING)"; done'
+# (a multi-argument `command -v` under the container's `sh`/dash reports only the
+# first name, which reads as "everything else is missing").
