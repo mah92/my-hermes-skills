@@ -102,18 +102,39 @@ else
   adv "platform accepts the token" "skipped (no token/curl)"
 fi
 
-echo "==> 3/6 host voice stack (advisory — shared by every profile)"
-voiced=0
-for key in $(cfg "tts.providers" | tr -d "{}' " | tr ',' '\n' | sed -n 's/^//p' | head -1); do :; done
-if [ -d "$MAIN/skills/hermes-persian-tts" ] && [ -d "$MAIN/skills/hermes-persian-stt" ]; then
-  T=$(mktemp -d); printf 'سلام این یک تست صوتی است\n' > "$T/in.txt"
-  if python3 "$MAIN/skills/hermes-persian-tts/scripts/tts.py" --speed 1.0 "$T/in.txt" "$T/out.ogg" >/dev/null 2>&1 && [ -s "$T/out.ogg" ]; then
-    okh "TTS" "$(stat -c%s "$T/out.ogg") bytes"
-    txt=$("$PY" "$MAIN/skills/hermes-persian-stt/scripts/stt.py" --quiet "$T/out.ogg" 2>/dev/null | tail -1)
-    [ -n "${txt// /}" ] && okh "STT round trip" "${txt:0:24}" || badh "STT round trip" "empty transcript"
-  else badh "TTS" "tts.py produced no audio"; fi
+echo "==> 3/6 host voice stack (advisory — runs THIS profile's configured providers)"
+mapfile -t TTS_INFO < <("$PY" - "$P/config.yaml" <<'PY'
+import sys, yaml
+cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
+tts = cfg.get("tts") or {}
+prov = (tts.get("providers") or {}).get(tts.get("provider")) or {}
+cmd = prov.get("command") if prov.get("type") == "command" else ""
+print((cmd or "").replace("\n", " ")); print(prov.get("output_format") or "ogg")
+PY
+)
+mapfile -t STT_INFO < <("$PY" - "$P/config.yaml" <<'PY'
+import sys, yaml
+cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
+stt = cfg.get("stt") or {}
+prov = (stt.get("providers") or {}).get(stt.get("provider")) or {}
+cmd = prov.get("command") if prov.get("type") == "command" else ""
+print((cmd or "").replace("\n", " "))
+PY
+)
+TTS_CMD="${TTS_INFO[0]:-}"; TTS_FMT="${TTS_INFO[1]:-ogg}"; STT_CMD="${STT_INFO[0]:-}"
+if [ -n "$TTS_CMD" ]; then
+  T=$(mktemp -d); printf 'test 1 2 3\n' > "$T/in.txt"
+  tts_run=$(sed -e "s|{input_path}|$T/in.txt|g" -e "s|{output_path}|$T/out.$TTS_FMT|g" <<<"$TTS_CMD")
+  if bash -c "$tts_run" >/dev/null 2>&1 && [ -s "$T/out.$TTS_FMT" ]; then
+    okh "TTS (profile's own provider)" "$(stat -c%s "$T/out.$TTS_FMT") bytes"
+    if [ -n "$STT_CMD" ]; then
+      stt_run=$(sed -e "s|{input_path}|$T/out.$TTS_FMT|g" <<<"$STT_CMD")
+      txt=$(bash -c "$stt_run" 2>/dev/null | tail -1)
+      [ -n "${txt// /}" ] && okh "STT round trip" "${txt:0:24}" || badh "STT round trip" "empty transcript"
+    else adv "host: STT round trip" "STT provider is not command-type — skipped"; fi
+  else badh "TTS (profile's own provider)" "the configured command produced no audio"; fi
   rm -rf "$T"
-else adv "host: voice stack" "hermes-persian-tts/stt not installed — skipped"; fi
+else adv "host: voice" "no command-type TTS provider configured — skipped"; fi
 
 echo "==> 4/6 host MCP servers (advisory — count only, no handshake)"
 mcp_count=$("$PY" - "$P/config.yaml" <<'PY'

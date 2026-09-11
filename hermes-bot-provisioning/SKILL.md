@@ -1,7 +1,7 @@
 ---
 name: hermes-bot-provisioning
 description: "Use when adding/removing a Bale or Soroush bot."
-version: 1.1.0
+version: 1.2.0
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -105,10 +105,10 @@ bot-specific token, only one active token, token unique across profiles,
 present, `state.db` present, no `/opt/hermes` leftovers in config or `.env`.
 **PENDING** (not failures): service/platform/state.db on a profile that was never
 started (`--no-start`), because there is no unit and no log yet.
-**Host checks** (advisory, labelled `host:`, never counted): the shared voice
-round trip — skipped unless the host has `hermes-persian-tts` and
-`hermes-persian-stt` — and the count of configured MCP servers (no handshake is
-performed; look for `MCP: registered` in the gateway log).
+**Host checks** (advisory, labelled `host:`, never counted): the voice round trip,
+which runs THIS profile's own configured TTS/STT command providers and is skipped
+when they are not command-type, and the count of configured MCP servers (no
+handshake is performed; look for `MCP: registered` in the gateway log).
 If the bot answers nothing, check in this order: the service, the `Connected as`
 line, the allowlists (`<USER_ID>` must be in `*_ALLOWED_USERS` **and**
 `*_ALLOWED_CHATS`), `getMe`, then platform reachability (see pitfalls).
@@ -136,6 +136,23 @@ for the profile, and removes the profile dir and workspace with a sudo escalatio
 ladder. It never touches the main profile, shared skills or the sandbox image.
 Exit codes: `0` removed, `1` a poller is running or leftovers remain, `3`
 nothing to remove (no profile, no workspace, no unit).
+
+## Operate a running bot
+- **Rotate a token** (platform revoked or leaked): edit `<platform>_BOT_TOKEN` in
+  the profile's `.env` (and `platforms.<platform>.bot_token` in its `config.yaml`
+  if that key is set — config wins), then restart that one gateway. Never have two
+  configurations live on the same token at once.
+- **Upgrade the adapter**: `git pull` in `<HOME>/.hermes/plugins/platforms/<platform>`
+  and then re-copy it into every profile that uses it — profiles keep their own
+  copy, so a pull in the shared dir does nothing for existing bots.
+- **Several bots for one owner**: run `add-bot.sh` once per bot with the same
+  `--user`; each needs its own token, profile and service. Different tokens only —
+  `verify-bot.sh` fails a duplicated one.
+- **Move a bot to another host**: `backup-bot-profile.sh` on the old host, copy the
+  tarballs plus the profile's `config.yaml`/`.env`, `add-bot.sh` on the new host
+  (same name/token), then restore the `*-{state,memory_store,kanban}.db` snapshots
+  with the gateway stopped, and make sure the OLD profile's gateway is stopped so
+  only one poller exists.
 
 ## Platform reference
 `references/platforms.md` — env-var tables, endpoints, token sources,
