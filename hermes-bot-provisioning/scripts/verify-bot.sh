@@ -1,32 +1,34 @@
 #!/bin/bash
 # verify-bot.sh <name> — health check for one bot profile. Read-only.
 #
-# PROFILE checks (counted, decide the exit code): service, platform connection,
-# token uniqueness, sandbox, workspace, state.db, config hygiene.
-# HOST checks (advisory, labelled "host:"): the shared voice stack and the shared
-# MCP servers. They pass for any profile because they exercise the host — a dead
-# profile must never look healthy because of them, so they never inflate the
-# profile score.
+# PROFILE checks decide the exit code. Checks that cannot be judged yet (a
+# --no-start profile has no unit and no log) are reported as PENDING, not FAIL,
+# so a clean provision is not reported as broken.
+# HOST checks (the shared voice stack and MCP servers) are advisory and labelled;
+# a dead profile must never look healthy because of them.
 set -uo pipefail
-NAME="${1:?usage: verify-bot.sh <name>}"
+NAME="${1:-}"
+[ -n "$NAME" ] || { echo "usage: verify-bot.sh <name>" >&2; exit 2; }
 [[ "$NAME" =~ ^[a-z0-9-]+$ ]] || { echo "invalid profile name: '$NAME'" >&2; exit 2; }
 H="${HOME:?HOME is not set}"
-MAIN="$H/.hermes"
+MAIN="${HERMES_HOME:-$H/.hermes}"
 P="$MAIN/profiles/$NAME"
 WS="$H/workspaces/$NAME"
-HV="$MAIN/hermes-agent/venv/bin/python"
-PASS=0; FAIL=0; HPASS=0; HFAIL=0
-ok()  { printf '  %-36s %s\n' "$1" "PASS"; PASS=$((PASS+1)); }
-bad() { printf '  %-36s %s\n' "$1" "FAIL${2:+: $2}"; FAIL=$((FAIL+1)); }
+PY="${HERMES_PY:-$MAIN/hermes-agent/venv/bin/python}"
+UNIT="$H/.config/systemd/user/hermes-gateway-$NAME.service"
+PASS=0; FAIL=0; PEND=0; HPASS=0; HFAIL=0
+ok()   { printf '  %-36s %s\n' "$1" "PASS"; PASS=$((PASS+1)); }
+bad()  { printf '  %-36s %s\n' "$1" "FAIL${2:+: $2}"; FAIL=$((FAIL+1)); }
+pend() { printf '  %-36s %s\n' "$1" "PENDING${2:+ ($2)}"; PEND=$((PEND+1)); }
 okh()  { printf '  %-36s %s\n' "host: $1" "ok${2:+ ($2)}"; HPASS=$((HPASS+1)); }
 badh() { printf '  %-36s %s\n' "host: $1" "FAIL${2:+: $2}"; HFAIL=$((HFAIL+1)); }
-adv() { printf '  %-36s %s\n' "$1" "$2"; }
+adv()  { printf '  %-36s %s\n' "$1" "$2"; }
 
 [ -d "$P" ] || { echo "no such profile: $P" >&2; exit 2; }
 [ -f "$P/config.yaml" ] || { echo "no config.yaml in $P — not a provisioned profile (typo?)" >&2; exit 2; }
-[ -x "$HV" ] || { echo "no host hermes venv python at $HV" >&2; exit 2; }
+[ -x "$PY" ] || { echo "no hermes venv python at $PY" >&2; exit 2; }
 
-cfg() { "$HV" - "$P/config.yaml" "$1" <<'PY'
+cfg() { "$PY" - "$P/config.yaml" "$1" <<'PY'
 import sys, yaml
 cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
 cur = cfg
@@ -37,53 +39,90 @@ PY
 }
 
 LOG="$P/logs/agent.log"
+STARTED=0
+[ -f "$UNIT" ] && STARTED=1
+[ -f "$LOG" ] && STARTED=1
+
 echo "==> 1/6 service + platform"
-[ "$(systemctl --user is-active "hermes-gateway-$NAME" 2>/dev/null)" = active ] \
-  && ok "service active" || bad "service active" "$(systemctl --user is-active "hermes-gateway-$NAME" 2>&1)"
-if [ -f "$LOG" ]; then
-  grep -qa 'Connected as' "$LOG" && ok "platform connected" || bad "platform connected" "no 'Connected as' in agent.log"
-  if tail -200 "$LOG" | grep -aq 'ERROR'; then
-    adv "recent ERROR line" "review: $(tail -200 "$LOG" | grep -a ERROR | tail -1 | cut -c1-70)"
-  else adv "recent ERROR line" "none in the last 200 lines"; fi
+if [ -f "$UNIT" ]; then
+  [ "$(systemctl --user is-active "hermes-gateway-$NAME" 2>/dev/null)" = active ] \
+    && ok "service active" || bad "service active" "$(systemctl --user is-active "hermes-gateway-$NAME" 2>&1)"
+  if [ -f "$LOG" ]; then
+    if grep -qa 'Connected as @[^ ]' "$LOG"; then ok "platform connected (handle seen)"
+    elif grep -qa 'Connected as' "$LOG"; then bad "platform connected" "'Connected as' with an EMPTY handle — the platform did not accept this token"
+    else bad "platform connected" "no 'Connected as' in agent.log"; fi
+    if tail -200 "$LOG" | grep -aq 'ERROR'; then
+      adv "recent ERROR line" "review: $(tail -200 "$LOG" | grep -a ERROR | tail -1 | cut -c1-70)"
+    else adv "recent ERROR line" "none in the last 200 lines"; fi
+  else
+    pend "platform connected" "no agent.log yet"
+    adv "recent ERROR line" "no log yet"
+  fi
 else
-  bad "platform connected" "no $LOG yet (gateway never started?)"
-  adv "recent ERROR line" "no log yet"
+  pend "service active" "no unit installed (--no-start?)"
+  pend "platform connected" "gateway never started"
 fi
 
-echo "==> 2/6 token uniqueness (one token = one poller)"
+echo "==> 2/6 credentials"
+ACT_PLAT=""
 for plat in bale soroush; do
   a=$(grep -m1 "^${plat^^}_BOT_TOKEN=" "$P/.env" 2>/dev/null | cut -d= -f2-)
   b=$(grep -m1 "^${plat^^}_BOT_TOKEN=" "$MAIN/.env" 2>/dev/null | cut -d= -f2-)
+  if [ -n "$a" ]; then ACT_PLAT="$plat"; fi
   if [ -n "$a" ] && [ "$a" = "$b" ]; then bad "$plat token differs from main" "same token -> double poller"
   elif [ -n "$a" ]; then ok "$plat token is bot-specific"
   else ok "$plat not configured"; fi
 done
-
-# Which platforms may poll at all: only ONE should have an active token.
 active=$(grep -cE '^[A-Z0-9]+_BOT_TOKEN=' "$P/.env" 2>/dev/null || true)
 [ "${active:-0}" -le 1 ] && ok "only one platform token active" || bad "only one platform token active" "$active active *_BOT_TOKEN lines"
-
+dup=""
+for other in "$MAIN"/profiles/*/.env; do
+  [ -f "$other" ] || continue
+  case "$other" in "$P/.env") continue ;; esac
+  o=$(grep -m1 "^${ACT_PLAT^^}_BOT_TOKEN=" "$other" 2>/dev/null | cut -d= -f2- || true)
+  a=$(grep -m1 "^${ACT_PLAT^^}_BOT_TOKEN=" "$P/.env" 2>/dev/null | cut -d= -f2- || true)
+  [ -n "$o" ] && [ "$o" = "$a" ] && dup="$other"
+done
+if [ -n "$dup" ]; then bad "token unique across profiles" "same token also in ${dup##*/profiles/}" ; else ok "token unique across profiles"; fi
 if [ ! -f "$P/.env" ]; then bad "profile .env present" "missing"; else ok "profile .env present"; fi
 
+# getMe: a green 'Connected as' can be a lie (some adapters log it for a bad
+# token with an empty handle), so ask the platform directly when we can.
+tok=$(grep -m1 "^${ACT_PLAT^^}_BOT_TOKEN=" "$P/.env" 2>/dev/null | cut -d= -f2- || true)
+api=""
+case "$ACT_PLAT" in bale) api="https://tapi.bale.ai" ;; soroush) api="https://api.splus.ir" ;; esac
+if [ -n "$tok" ] && [ -n "$api" ] && command -v curl >/dev/null 2>&1; then
+  resp=$(curl -s -m 12 "$api/bot$tok/getMe" 2>/dev/null || true)
+  case "$resp" in
+    *'"ok":true'*) ok "platform accepts the token (getMe)" ;;
+    *'"ok":false'*) bad "platform accepts the token (getMe)" "$(printf '%s' "$resp" | tr -d '\n' | cut -c1-70)" ;;
+    *) adv "platform accepts the token" "no answer from $api (network/outage? not counted)" ;;
+  esac
+else
+  adv "platform accepts the token" "skipped (no token/curl)"
+fi
+
 echo "==> 3/6 host voice stack (advisory — shared by every profile)"
-if [ -d "$H/.hermes/skills/hermes-persian-tts" ] && [ -d "$H/.hermes/skills/hermes-persian-stt" ]; then
+voiced=0
+for key in $(cfg "tts.providers" | tr -d "{}' " | tr ',' '\n' | sed -n 's/^//p' | head -1); do :; done
+if [ -d "$MAIN/skills/hermes-persian-tts" ] && [ -d "$MAIN/skills/hermes-persian-stt" ]; then
   T=$(mktemp -d); printf 'سلام این یک تست صوتی است\n' > "$T/in.txt"
-  if python3 "$H/.hermes/skills/hermes-persian-tts/scripts/tts.py" --speed 1.0 "$T/in.txt" "$T/out.ogg" >/dev/null 2>&1 && [ -s "$T/out.ogg" ]; then
+  if python3 "$MAIN/skills/hermes-persian-tts/scripts/tts.py" --speed 1.0 "$T/in.txt" "$T/out.ogg" >/dev/null 2>&1 && [ -s "$T/out.ogg" ]; then
     okh "TTS" "$(stat -c%s "$T/out.ogg") bytes"
-    txt=$("$HV" "$H/.hermes/skills/hermes-persian-stt/scripts/stt.py" --quiet "$T/out.ogg" 2>/dev/null | tail -1)
+    txt=$("$PY" "$MAIN/skills/hermes-persian-stt/scripts/stt.py" --quiet "$T/out.ogg" 2>/dev/null | tail -1)
     [ -n "${txt// /}" ] && okh "STT round trip" "${txt:0:24}" || badh "STT round trip" "empty transcript"
   else badh "TTS" "tts.py produced no audio"; fi
   rm -rf "$T"
 else adv "host: voice stack" "hermes-persian-tts/stt not installed — skipped"; fi
 
-echo "==> 4/6 host MCP servers (advisory)"
-mcp_count=$("$HV" - "$P/config.yaml" <<'PY'
+echo "==> 4/6 host MCP servers (advisory — count only, no handshake)"
+mcp_count=$("$PY" - "$P/config.yaml" <<'PY'
 import sys, yaml
 cfg = yaml.safe_load(open(sys.argv[1], encoding="utf-8")) or {}
 print(len(cfg.get("mcp_servers") or {}))
 PY
 )
-if [ "$mcp_count" = 0 ]; then adv "host: MCP servers" "none configured"; else adv "host: MCP servers" "$mcp_count configured (check 'MCP: registered' / handshake in the gateway log)"; fi
+if [ "$mcp_count" = 0 ]; then adv "host: MCP servers" "none configured"; else adv "host: MCP servers" "$mcp_count configured — see 'MCP: registered' in the gateway log"; fi
 
 echo "==> 5/6 terminal backend"
 back=$(cfg "terminal.backend")
@@ -103,8 +142,10 @@ else ok "backend local (no container)"; fi
 
 echo "==> 6/6 config hygiene"
 grep -q '/opt/hermes' "$P/config.yaml" "$P/.env" 2>/dev/null && bad "no container-only paths" "found /opt/hermes refs" || ok "no container-only paths"
-[ -r "$P/state.db" ] && ok "state.db present" || bad "state.db" "missing"
+if [ -r "$P/state.db" ]; then ok "state.db present"
+elif [ "$STARTED" -eq 0 ]; then pend "state.db present" "gateway never started"
+else bad "state.db" "missing"; fi
 
 echo
-echo "==> $NAME: $PASS pass / $FAIL fail (profile)   |   $HPASS ok / $HFAIL fail (host, advisory)"
+echo "==> $NAME: $PASS pass / $FAIL fail / $PEND pending (profile)   |   $HPASS ok / $HFAIL fail (host, advisory)"
 [ "$FAIL" -eq 0 ]
