@@ -28,6 +28,8 @@ Composable, lightweight skills for the [Hermes Agent](https://hermes-agent.nousr
 | Chinese/English STT | `sherpa-onnx-en-stt/` | Transcribe English audio with sherpa-onnx. |
 | NASIR architecture | `nasir-architecture/` | Conventions for the NASIR C++ architecture. |
 | Cast to projector | `wanbo-dlna-cast/` | Cast media to a Wanbo projector over DLNA. |
+| Book → skill converter | `book-to-skill/` | Convert a book (PDF/EPUB/DOCX/HTML/RTF) into a structured Hermes skill: extract, cut chapters, generate chapters via LLM, security scan. Includes a Python package (`book_to_skill/`) + CLI tools. |
+| Book → LightRAG pipeline | `book-to-lightrag-pipeline/` | Batch book→skill automation + LightRAG knowledge-graph layer: local embeddings, retrieval bake-offs, eval-report recipes (incl. Persian RTL PDFs). |
 | Media helpers | `media/` | YouTube/media download helpers. |
 
 Self-hosted Firecrawl now lives in its own repository:
