@@ -26,6 +26,7 @@ Composable, lightweight skills for the [Hermes Agent](https://hermes-agent.nousr
 | Table as image | `table-as-image/` | Render table requests as PNG (RTL/Persian friendly) instead of markdown — for chat clients that mangle tables. |
 | Local diffusion model setup | `local-diffusion-model-setup/` | Deploy image/video-gen models locally (FLUX klein) with ComfyUI + MCP. |
 | Chinese/English STT | `sherpa-onnx-en-stt/` | Transcribe English audio with sherpa-onnx. |
+| Arabic STT | `sherpa-onnx-ar-stt/` | Transcribe Arabic audio with sherpa-onnx (FastConformer int8 8.48% WER; streaming zipformer variant). |
 | NASIR architecture | `nasir-architecture/` | Conventions for the NASIR C++ architecture. |
 | Cast to projector | `wanbo-dlna-cast/` | Cast media to a Wanbo projector over DLNA. |
 | Book → skill converter | `book-to-skill/` | Convert a book (PDF/EPUB/DOCX/HTML/RTF) into a structured Hermes skill: extract, cut chapters, generate chapters via LLM, security scan. Includes a Python package (`book_to_skill/`) + CLI tools. |
