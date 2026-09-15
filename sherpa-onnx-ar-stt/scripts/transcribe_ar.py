@@ -29,7 +29,8 @@ def ensure_model():
     if os.path.exists(MODEL) and os.path.getsize(MODEL) > 100_000_000 and os.path.exists(TOKENS):
         return
     os.makedirs(MDIR, exist_ok=True)
-    print("Model missing — downloading Arabic FastConformer int8 (174 MB)...", file=sys.stderr)
+    if not QUIET:
+        print("Model missing — downloading Arabic FastConformer int8 (174 MB)...", file=sys.stderr)
     for f in ("model.int8.onnx", "tokens.txt"):
         subprocess.run(["curl", "-sL", "--retry", "5", "-C", "-", "-o", os.path.join(MDIR, f), BASE + f],
                        check=True)
@@ -109,7 +110,10 @@ def load_tokens():
 if len(sys.argv) < 2:
     sys.exit(__doc__)
 src = sys.argv[1]
-out = sys.argv[2] if len(sys.argv) > 2 else os.path.splitext(src)[0] + "_transcript.txt"
+QUIET = "--quiet" in sys.argv
+args = [a for a in sys.argv[1:] if a != "--quiet"]
+src = args[0]
+out = args[1] if len(args) > 1 else os.path.splitext(src)[0] + "_transcript.txt"
 
 ensure_model()
 id2tok = load_tokens()
