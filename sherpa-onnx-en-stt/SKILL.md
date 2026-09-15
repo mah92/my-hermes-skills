@@ -48,6 +48,13 @@ wc -w out.txt            # ~190 words per minute of speech
 head -c 600 out.txt      # readable? first paragraph sane?
 ```
 
+## Switching STT Language / Provider
+
+STT language is a **per-user setting** in `~/.hermes/config.yaml` — change
+`stt.provider` from your own Hermes settings (or ask your agent) and restart
+the gateway. See the `hermes-persian-stt` skill's "Switching STT Language /
+Provider" section for the full three-language provider yaml (fa / en / ar).
+
 ## Pitfalls (all learned the hard way 2026-08-26)
 - **Streaming (online) zipformer API is BROKEN in the installed sherpa-onnx
   python wheels (1.12.11 AND 1.13.4)**: `OnlineRecognizer.from_transducer`

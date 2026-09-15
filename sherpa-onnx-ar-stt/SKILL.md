@@ -110,10 +110,11 @@ head -c 600 out.txt
   metadata — keep the full metadata block from the HF repo's `convert.py`.
 
 ## Language-switching (Hermes multi-ASR note)
-Each Hermes user profile picks its STT via `~/.hermes/config.yaml`:
+STT language is a **per-user setting** in `~/.hermes/config.yaml` — each user
+can change it from their own Hermes settings (or ask their agent):
 ```yaml
 stt:
-  provider: <name>
+  provider: fastconformer-ar   # shenava (fa) | paraformer (en) | fastconformer-ar (ar)
 ```
 To serve multiple languages on one box, register one command provider per
 language under `stt.providers` (ar/en/fa scripts are interchangeable — same
