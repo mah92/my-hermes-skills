@@ -16,6 +16,7 @@ Composable, lightweight skills for the [Hermes Agent](https://hermes-agent.nousr
 
 | Skill | Folder | What it does |
 |---|---|---|
+| Persian TTS (Zahra) | `hermes-persian-tts/` | MatchaTTS C++ daemon TTS: Persian/English Zahra voice, ~200ms per request, auto-splits long text. |
 | Bot provisioning (Bale / Soroush Plus) | `hermes-bot-provisioning/` | Add or remove a bot on any Hermes host: one profile per bot, its own token/allowlists, gateway as a host systemd user service, optional Hermes-free docker sandbox. Scripts: `add-bot.sh`, `rm-bot.sh`, `verify-bot.sh`, `backup-bot-profile.sh`. |
 | Libgen book downloader | `hermes-libgen-book-download-skill/` | Download books from working libgen mirrors: search → metadata → file. |
 | Libgen article downloader | `hermes-libgen-article-download-skill/` | Download scientific papers from libgen scimag (Articles chapter). |
