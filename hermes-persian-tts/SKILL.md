@@ -155,4 +155,6 @@ Subsequent requests skip all loading — just normalize + synthesize.
 5. **Vocos model incompatible.** Use the k2-fsa `vocos-22khz-univ.onnx` (mels → mag/x/y). The binary reconstructs the waveform via ISTFT.
 6. **Empty text passed to tts.py.** Hermes writes text to `{input_path}`. The script reads it with UTF-8 encoding.
 7. **OPUS 48kHz metadata.** OGG output may show 48000 Hz in ffprobe — normal OPUS internal rate.
-8. **Long text is auto-split by tts.py (since v1.1.0).** Text longer than ~2000 chars is now split at natural pauses (`. ! ? : ; ، « » ( )` and newlines) inside `tts.py`, synthesized chunk by chunk, and the WAVs are concatenated into a single OGG. Without this, text longer than ~3500 chars makes the daemon spin forever and balloon memory (observed: ~18 GB RSS → host OOM-kill). Do NOT bypass the splitter.
+8. **Long text is auto-split by tts.py (since v1.1.0).** Text longer than ~2000 chars is split at natural pauses (`. ! ? : ; ، « » ( )` and newlines), synthesized chunk by chunk, and the WAVs are concatenated into a single OGG. Without this, >~3500 chars makes the daemon spin and balloon memory (~18 GB RSS → host OOM-kill).
+9. **wave module: setparams only on the first file.** In chunk merging, call `out.setparams()` only for chunk 0 — per-file calls raise `Error: cannot change parameters after starting to write`.
+10. **ffmpeg timeout must scale with audio length.** The fixed 30s timeout fails on long merged WAVs; `_wav_to_ogg` now uses `max(30, seconds*0.2+30)`.
