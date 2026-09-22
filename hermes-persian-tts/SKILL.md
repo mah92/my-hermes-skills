@@ -1,7 +1,7 @@
 ---
 name: hermes-persian-tts
 description: "Persian TTS via MatchaTTS C++ daemon — general-purpose, not Bale-specific. Loads models once (2.5s), then ~200ms per request."
-version: 1.1.0
+version: 1.2.0
 author: علی محمودی
 license: MIT
 metadata:
@@ -158,3 +158,5 @@ Subsequent requests skip all loading — just normalize + synthesize.
 8. **Long text is auto-split by tts.py (since v1.1.0).** Text longer than ~2000 chars is split at natural pauses (`. ! ? : ; ، « » ( )` and newlines), synthesized chunk by chunk, and the WAVs are concatenated into a single OGG. Without this, >~3500 chars makes the daemon spin and balloon memory (~18 GB RSS → host OOM-kill).
 9. **wave module: setparams only on the first file.** In chunk merging, call `out.setparams()` only for chunk 0 — per-file calls raise `Error: cannot change parameters after starting to write`.
 10. **ffmpeg timeout must scale with audio length.** The fixed 30s timeout fails on long merged WAVs; `_wav_to_ogg` now uses `max(30, seconds*0.2+30)`.
+11. **~4 GB RSS was ONNX Runtime's CPU arena (fixed in matcha_tts_infer 580946c).** Models are only ~180 MB on disk; the giant RSS came from ORT's default CPU memory arena holding all intermediate activations. `DisableCpuMemArena()` + `DisableMemPattern()` in `g_session_opts` cut steady RSS from ~4.1 GB to ~660 MB with no latency change. Benchmarked with `scripts/bench_tts.sh <label>` (short/med/long/repeated requests, records wall time + VmRSS per step).
+12. **The daemon must start with cwd=NormalizeText/ even when launched from a script wrapper** — a background `nohup` launched before `cd` inherits the wrong cwd and aborts on `./assets/ezafe_spiece.model` after models load. Use `( cd "$NORMDIR" && nohup ... & )`.
