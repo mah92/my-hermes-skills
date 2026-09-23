@@ -132,7 +132,7 @@ query tests 6/6 passed (hybrid + mix). Build shape: per-chapter md files → `ai
 batch; expect per-doc timeouts → retry passes (purge non-processed doc_status, re-
 ainsert; a `dup-*` doc-id class appears after retries — purge by id prefix only
 after confirming the real `doc-*` entry is processed). Seed scripts:
-`/home/oem/booktest/` (`kg_index.py`, `kg_retry*.py`, `local_embed.py`,
+the old seed scratch dir (`kg_index.py`, `kg_retry*.py`, `local_embed.py`,
 `kg-query` (was `kg_fetch_context.py`), `compare3.py`, `compare_round2.py`, `kg_multihop_test.py`).
 
 **Querying:** `kg-query "<question>" -g <graph> -m naive` — pure vector search,
@@ -170,7 +170,7 @@ Deliverable recipes (scripts + templates in references):
 - Report FORMAT rules (verbatim questions, verbatim answers, per-answer cost
   banners — user corrected all three): `references/eval-report-format.md`
 - Persian PDFs: reportlab cannot shape RTL glyphs. Working stack = hand-written
-  RTL HTML (Vazir font via file:///home/oem/.fonts/vazir/, dir=rtl) rendered with
+  RTL HTML (Vazir font via file://$HOME/.fonts/vazir/, dir=rtl) rendered with
   weasyprint (pip-installed into the hermes venv). Verify rendering by rasterizing
   pages and inspecting with vision. `references/persian-pdf-report.md`
 - Tutorial/explainer PDFs (e.g. "short LightRAG tutorial") are a separate
