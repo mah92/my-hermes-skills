@@ -245,21 +245,22 @@ the profile side, as a thin shim over `kg-ask`.
   `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
   `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
 - **Skill-first install on a fresh machine:** install ONLY the skill; it drives the repo (never vendor
-  code into a skill). Verified end to end 2026-09-23 against the published `v0.2.0`:
+  code into a skill). Verified end to end 2026-09-23 against the published `v0.2.1`:
   1. install/copy this skill (`hermes skills install mah92/my-hermes-skills/book-to-lightrag-pipeline`
      or copy the folder into `~/.hermes/skills/`);
   2. clone the pinned release — both repos are PUBLIC, so HTTPS needs no key:
-     `git clone --depth 1 --branch v0.2.0 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
+     `git clone --depth 1 --branch v0.2.1 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
      (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.7 GB with the CPU torch wheel);
   3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
   4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
   5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
 
-  Rehearsed for real on 2026-09-23 on this box with a clean venv (`/tmp/fresh/venv`, since removed):
-  HTTPS clone of tag v0.2.0 -> `install.sh` (~6.5 min, 1.7 GB with the CPU torch wheel) ->
-  `--check` OK (lightrag 1.5.7, mcp 1.30, pymupdf, all four console scripts) -> `kg-query` returned
-  29,668 chars of context -> `kg-mcp` served 11 tools and `kg_list` saw kg_nav. Nothing needs a key
-  or a running Hermes to pass those steps; only the MCP registration writes config.yaml.
+  Rehearsed twice on this box in throwaway venvs (since removed): v0.2.0 with a cold pip cache
+  (~6.5 min, 1.7 GB with the CPU torch wheel) and v0.2.1 with the cache warm. Both runs: HTTPS clone
+  of the tag -> `install.sh` -> `--check` OK (lightrag 1.5.7, mcp 1.30, pymupdf, four console
+  scripts, tiktoken cache) -> `kg-query` returned ~26-30K chars of context -> `kg-mcp` served 11
+  tools and `kg_list` saw kg_nav. Nothing needs a key or a running Hermes to pass those steps; only
+  the MCP registration writes config.yaml.
 - **`tiktoken` tries to download its BPE file from an Azure blob that this box cannot route to**
 (`openaipublic.blob.core.windows.net` — a 15 s curl from here never answers, and Python raises
 errno 101; LightRAG builds the tokenizer at load time, so the whole process dies). The fix is
