@@ -231,10 +231,15 @@ on the profile side, as a thin shim over `kg-ask`.
   `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
   `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
 - **Skill-first install on a fresh machine:** install ONLY the skill; it drives the repo (never vendor
-  code into a skill): (1) install/copy this skill; (2) `git clone git@github.com:mah92/lightrag-mcp.git
-  && cd lightrag-mcp && ./install.sh` (pin a release tag for reproducibility); (3) ASK THE USER before
-  `hermes mcp add lightrag-kg --command ~/.hermes/lightrag-mcp-venv/bin/kg-mcp` (it edits config.yaml);
-  (4) `./install.sh --check` then `kg-query "test" -g <graph>`; (5) build or register a graph.
+  code into a skill). Verified end to end 2026-09-23 against the published `v0.2.0`:
+  1. install/copy this skill (`hermes skills install mah92/my-hermes-skills/book-to-lightrag-pipeline`
+     or copy the folder into `~/.hermes/skills/`);
+  2. clone the pinned release — both repos are PUBLIC, so HTTPS needs no key:
+     `git clone --depth 1 --branch v0.2.0 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
+     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.5 GB with the CPU torch wheel);
+  3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
+  4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
+  5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
 - **`tiktoken` reaches an Azure blob that this box cannot route to** (`openaipublic.blob.core
 .windows.net`, errno 101) — LightRAG builds its tokenizer at load time, so every entry point must
 set `TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache` (pre-populated) or it dies with a connection
