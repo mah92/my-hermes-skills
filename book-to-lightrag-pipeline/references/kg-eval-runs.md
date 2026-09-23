@@ -1,7 +1,7 @@
 # KG evaluation-run scripts (book-to-lightrag-pipeline)
 
 Session-specific scripts from the 2026-09-11 validation runs (PTW + ExO).
-They live in <WORKDIR>/booktest/ and are referenced by the pipeline SKILL.md.
+**HISTORICAL:** these harness scripts lived in the (now deleted) `~/booktest/` scratch dir; the reproducible parts are the `kg-query`/`kg-ask` CLI calls plus the report formats below.
 
 ## `kg-query` — context-only retrieval (no LLM answer)  [was `kg_fetch_context.py`]
 

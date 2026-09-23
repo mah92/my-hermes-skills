@@ -1,6 +1,6 @@
 ---
 name: book-to-lightrag-pipeline
-description: "LightRAG knowledge-graph layer over book skills: batch KG builds, graph queries, with/without-book eval reports. Use when building or querying kg_* graphs, local embeddings, retrieval bake-offs, or the no-agent batch book pipeline."
+description: "Use when building, querying or operating kg_* LightRAG graphs: batch book→skill→graph pipelines, local embeddings, the lightrag-mcp server and its kg-query/kg-ask/kg-add-book CLI, and with/without-book eval reports."
 version: 2.0.0
 author: Hermes Agent
 license: MIT
@@ -32,7 +32,8 @@ former `book-to-skill-pipeline` + `book-to-skill-ops` skills.
    directory exists first; the downloader fails with bare `FileNotFoundError`
    otherwise (not a clear "no such dir" message).
 2. **Extract** — converter's `extract.py --mode text|technical` (local, free).
-   Only scanned PDFs need OCR (tesseract eng/chi on this box; Persian → vision model).
+   Only scanned PDFs need OCR. This box has tesseract langs eng/fas/osd (there is no chi):
+   use `fas` for Persian scans, and keep vision-model OCR only for pages where fas fails.
 3. **Cut chapters** — heading-anchored slices of `full_text.txt`. Keep the LAST
    regex match per chapter heading: ToC lines match first and would empty every slice.
 4. **Generate chapters** — per-chapter LLM calls from a script (concurrency 4):
@@ -69,7 +70,7 @@ per 500–700-page book at flash-model rates.
   trim until under budget by this measure) and `chars / 4` (prose estimate). Code-heavy
   text runs ~3.5–3.8 chars/token. Run `scripts/estimate_tokens.py <skill-dir>` for a
   per-file table.
-- **Read `tools/scan_generated_skill.py` rules BEFORE writing content** (approximate):
+- **Load the `book-to-skill` skill and read its `tools/scan_generated_skill.py` rules BEFORE writing content** (approximate):
   real files not symlinks; valid UTF-8; no invisible Unicode codepoints; no
   "you are now" / "ignore previous instructions" / "disregard the system" /
   `<system>` tags / chat-template delimiters (`<|im_start|>`, `[INST]`); exfiltration
@@ -110,7 +111,7 @@ answer path.
 - **Bake-off discipline (owner-demanded, before adopting ANY retrieval design):**
   blind paraphrased questions + fixed golden chapters + ≥2 independent judges +
   metrics = answer quality, context tokens, golden-chapter coverage. Present results
-  as an IMAGE (table-as-image pattern), never a markdown table in Bale. Get owner
+  as an IMAGE (table-as-image pattern), never a markdown table in the messaging platform. Get owner
   sign-off on numbers before wiring a layer in.
 
 ## Knowledge-graph enrichment layer (LightRAG)
@@ -120,20 +121,25 @@ Chosen direction: LightRAG — incremental insert (new books merge into the same
 graph without rebuild), pluggable LLM, local-embedding capable. **User hard rule:
 embeddings must come from a local model (e.g. HF), never GPT/OpenAI.**
 
-LightRAG 1.5.7 unmodified (193 files byte-verified vs PyPI); integration via the
-official plugin interfaces only: extraction LLM `deepseek-chat` via
-`openai_complete_if_cache`; embeddings local `intfloat/multilingual-e5-base` (768d,
-CPU, e5 `query:`/`passage:` prefixes) via a custom async func wrapped with
-`wrap_embedding_func_with_attrs`. API details + embedding-model comparison:
-`references/kg-embedding-local.md`.
+LightRAG 1.5.7 installed from PyPI (`lightrag-hku`), unpatched; integration through the
+official plugin interfaces only: extraction LLM `deepseek-chat` via `openai_complete_if_cache`;
+embeddings local, wrapped with lightrag's own `EmbeddingFunc` and e5 `query:`/`passage:`
+prefixes (`kg_common.py:build_rag`). The current default is `intfloat/multilingual-e5-small`
+(384d, the fa+en benchmark winner, `server.py:_model_for`); a graph keeps whatever model its
+`meta.json` pins, so older graphs still run on `intfloat/multilingual-e5-base` (768d) or
+`heydariAI/persian-embeddings`. The historical bake-off used a hand-rolled async wrapper
+(`wrap_embedding_func_with_attrs`) — that recipe lives in `references/kg-embedding-local.md`.
 
 Graphs built: kg_ptw (698 ent / 879 rel), kg_exo (336/386), kg_merged (1703/2222);
 query tests 6/6 passed (hybrid + mix). Build shape: per-chapter md files → `ainsert`
 batch; expect per-doc timeouts → retry passes (purge non-processed doc_status, re-
 ainsert; a `dup-*` doc-id class appears after retries — purge by id prefix only
-after confirming the real `doc-*` entry is processed). Seed scripts:
-the old seed scratch dir (`kg_index.py`, `kg_retry*.py`, `local_embed.py`,
-`kg-query` (was `kg_fetch_context.py`), `compare3.py`, `compare_round2.py`, `kg_multihop_test.py`).
+after confirming the real `doc-*` entry is processed). The build/query scripts live in
+`~/lightrag/ins-nav/` (`kg_build.py`, `kg_add_new.py`, `kg_purge.py`, and `kg_q.py`, which is now
+only a compatibility shim forwarding to `kg-query`). The old scratch dir
+`~/booktest/` (`kg_index.py`, `local_embed.py`, `compare3.py`, `kg_multihop_test.py`, …) NO LONGER
+EXISTS, so the eval-run recipes are historical: re-derive them with the current `kg-query`/`kg-ask`
+CLI instead of the old script names.
 
 **Querying:** `kg-query "<question>" -g <graph> -m naive` — pure vector search,
 works with a dummy LLM func (no LLM cost). `hybrid` needs a real LLM for two-level
@@ -200,7 +206,7 @@ Defenses (all verified):
 - Route compact high-density artifacts (cheatsheet) to a non-reasoning chat model.
 
 **Infra notes:** generation scripts need `requests`+`PySocks` and the socks route
-(see socks5-proxy-routing); run with the hermes venv python. Target dir must exist
+(no separate skill for it: the proxy is `ALL_PROXY=socks5h://127.0.0.1:<port>`); run with the venv python that has `requests`+`PySocks`. Target dir must exist
 before download-to-disk (a missing `~/Downloads` failed every attempt as
 "No such file or directory" after each fresh signed URL).
 
@@ -215,19 +221,27 @@ The generation prompt must include "do not rewrite LaTeX" so chapters keep formu
 
 ### Install shape (one venv, one package, then a skill)
 
-`mah92/lightrag-mcp` -> `./install.sh` creates ONE venv (`~/.hermes/lightrag-mcp-venv`) holding both
-the MCP server and the CLI — `kg-mcp`, `kg-query`, `kg-ask`, `kg-add-book`. Do not split them across
-two interpreters: that is how `lightrag` went missing while `kg_create`/`kg_list` kept working.
-Register with `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp`. The skill itself is the
+`mah92/lightrag-mcp` -> `./install.sh` puts the MCP server AND the CLI in ONE venv
+(`kg-mcp`, `kg-query`, `kg-ask`, `kg-add-book`). Never split them across two interpreters: that is
+how `lightrag` went missing while `kg_create`/`kg_list` kept working — **whichever venv runs a
+`kg-*` entry point needs `lightrag` + `mcp<2` + `torch` + `pymupdf`**.
+
+Path story (one line, no confusion): `install.sh` creates `~/.hermes/lightrag-mcp-venv` by
+default and `LIGHTRAG_MCP_VENV=<path>` overrides it; the pre-existing install on this box lives in
+`~/.hermes/mcp-venv`, which is what `hermes mcp add` registered — so run checks as
+`LIGHTRAG_MCP_VENV=~/.hermes/mcp-venv ./install.sh --check`. Registration either way:
+`hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp`, or the form this box uses,
+`--command <venv>/bin/python --args <repo>/src/lightrag_kg_mcp/server.py`. The skill itself is the
 operating manual and stays in the skills collection; persona/profile glue (persona name, persona
-text, chat ids, graph choice — e.g. `askar.py` + `personas/askar.txt`) stays OUT of both repos,
-on the profile side, as a thin shim over `kg-ask`.
+text, chat ids, graph choice — e.g. the profile-local persona shim) stays OUT of both repos, on
+the profile side, as a thin shim over `kg-ask`.
 
 - **Canonical names (one operation, one name):** MCP tools use underscores, the CLI the same name with
   hyphens. `kg_query`/`kg-query` = retrieve context only (no answer LLM — cheap, safe for grounding);
   `kg_ask`/`kg-ask` = retrieve + answer with `[ref N]` citations (add `--persona-file`/`--name` for a
   persona); `kg_add_book`/`kg-add-book` = PDF -> skill md -> graph (long: `background=True` + `kg_jobs`);
-  `kg_add_markdown`, `kg_add_repo`, `kg_register`, `kg_delete`, `kg_list`, `kg_setup` are MCP-only;
+  `kg_create`, `kg_jobs`, `kg_add_markdown`, `kg_add_repo`, `kg_register`, `kg_delete`, `kg_list`,
+  `kg_setup` are MCP-only (no CLI);
   `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
   `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
 - **Skill-first install on a fresh machine:** install ONLY the skill; it drives the repo (never vendor
@@ -236,7 +250,7 @@ on the profile side, as a thin shim over `kg-ask`.
      or copy the folder into `~/.hermes/skills/`);
   2. clone the pinned release — both repos are PUBLIC, so HTTPS needs no key:
      `git clone --depth 1 --branch v0.2.0 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
-     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.5 GB with the CPU torch wheel);
+     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.7 GB with the CPU torch wheel);
   3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
   4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
   5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
@@ -246,11 +260,13 @@ on the profile side, as a thin shim over `kg-ask`.
   `--check` OK (lightrag 1.5.7, mcp 1.30, pymupdf, all four console scripts) -> `kg-query` returned
   29,668 chars of context -> `kg-mcp` served 11 tools and `kg_list` saw kg_nav. Nothing needs a key
   or a running Hermes to pass those steps; only the MCP registration writes config.yaml.
-- **`tiktoken` reaches an Azure blob that this box cannot route to** (`openaipublic.blob.core
-.windows.net`, errno 101) — LightRAG builds its tokenizer at load time, so every entry point must
-set `TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache` (pre-populated) or it dies with a connection
-error. `kg_common.py` sets it on import for all `kg-*` scripts and the server; the old standalone
-scripts each did it privately, which is why only they worked.
+- **`tiktoken` tries to download its BPE file from an Azure blob that this box cannot route to**
+(`openaipublic.blob.core.windows.net` — a 15 s curl from here never answers, and Python raises
+errno 101; LightRAG builds the tokenizer at load time, so the whole process dies). The fix is
+`TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache`, which `kg_common.py` sets **on import, but only when
+that directory already exists** — so a fresh machine must populate the cache (a network that can
+reach the blob does it with `TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache python -c "import tiktoken;
+tiktoken.get_encoding('o200k_base')"`; `install.sh` attempts exactly that and warns if it cannot).
 - **Long book jobs: `kg_add_book(..., background=True)`** returns a job id at once (log +
 `job.json` under `~/lightrag/jobs/<id>/`, poll with the `kg_jobs` tool, the state file survives an
 MCP restart). The job body is `kg_add_book.py`, which is resumable — an existing extraction, an
@@ -260,7 +276,24 @@ already-generated skill and PROCESSED documents are all skipped, so a crash cost
 
 Source of truth: `~/lightrag/kg_mcp/repo` (git, `mah92/lightrag-mcp`,
 `src/lightrag_kg_mcp/server.py`); `~/lightrag/kg_mcp/server.py` is a plain copy — mirror it
-after every edit. Tools: kg_create/list/add_book/add_repo/add_markdown/ask/delete/setup.
+after every edit.
+
+All 11 tools (`hermes mcp test lightrag-kg` prints exactly this list). CLI = same name with hyphens,
+present only where the operation is useful outside an agent:
+
+| tool | what it does | use it when | CLI |
+|---|---|---|---|
+| `kg_query` | retrieve context only, no answer LLM | grounding, cheap probing, feeding another model | `kg-query` |
+| `kg_ask` | retrieve + answer with `[ref N]` citations | an answer in the graph's own words | `kg-ask` |
+| `kg_add_book` | PDF → skill markdown → graph (`background=True`) | ingesting a book/paper | `kg-add-book` |
+| `kg_add_markdown` | insert markdown text/file/dir directly (`replace=`) | one note, or refreshing a doc | — |
+| `kg_add_repo` | repo → arc42 doc + its reference PDFs → graph | code/document repos | — |
+| `kg_register` | register an existing graph kept outside `~/lightrag/kg` (`root`) | adopting a graph built elsewhere | — |
+| `kg_create` | create an empty graph (+ its embedding model) | starting a new topic domain | — |
+| `kg_list` | graphs, embedding model, doc count | first call in a session | — |
+| `kg_jobs` | background job state, doc counts, log path | after `kg_add_book(background=True)` | — |
+| `kg_delete` | remove a graph (external data needs `delete_data=true`) | retiring a graph, never a live one | — |
+| `kg_setup` | pre-download embedding models, verify the environment | fresh install, new model | — |
 
 - **It runs on `~/.hermes/mcp-venv` (python3.11 + `mcp<2`), not the hermes venv.** That venv
 drifted once and silently lost `lightrag` → every graph tool died with ModuleNotFoundError,
@@ -273,7 +306,8 @@ kg_add_book, kg_add_repo for every caller. Tool functions that await LightRAG mu
 `async def` and await directly.
 - **Reload without a gateway restart.** After editing server.py, SIGKILL the lightrag MCP child
 (`pgrep -f lightrag_kg_mcp`): the gateway respawns it on the next tool call with the new file +
-venv. Verify with `hermes <...> mcp test lightrag-kg` (prints the live tool list) and with
+venv. Verify with `hermes mcp test lightrag-kg` (prints the live tool list; in the gateway venv it is
+`~/.hermes/hermes-agent/venv/bin/python -m hermes_cli.main mcp test lightrag-kg`) and with
 `kg_create` (its `embedding_model` reveals which revision is running).
 - **Do not SIGKILL by cmdline substring from a shell/heredoc** whose own text contains that
 substring (e.g. `lightrag_kg_mcp` in the heredoc) — the loop matches its own process and kills
@@ -296,14 +330,29 @@ writes `sections.json` from PDF bookmarks (levels 1/2, auto-titles for machine-n
 then printed-ToC lines); `kg_add_book` now runs it before `generate_skill.py`, which prefers
 `sections.json` and only falls back to the `"Chapter N"` regex. The regex alone yielded 2 of 10
 chapters for a 681-page book.
-- **`kg_add_book` blocks the MCP call for 20-30 min** (generation + insert subprocesses, 2 h
-timeouts). For long jobs run the pipeline scripts directly (they resume: only basenames without a
-PROCESSED doc_status row are inserted) so the MCP server stays responsive.
+- **`kg_add_book` blocks the MCP call for the whole run** (20-30 min was one observed book; the
+code's limits are a 4 h timeout on generation and insert, 1 h on pdftotext/make_sections —
+`server.py:272`, `kg_add_book.py:58,65,83`). Pass `background=True`, or run `<venv>/bin/kg-add-book`
+directly, so the MCP server stays responsive; both are resumable (only basenames without a
+PROCESSED doc_status row are inserted).
 - **`kg_add_markdown(graph, markdown|md_path, doc_name, replace)` semantics:** inline text or a
-`.md` file/dir; stored as `<name>.md` under `<graph>/inputs/`. Dedup is by CONTENT hash, so a
-re-insert of identical text is a no-op; `replace=True` first deletes documents whose stored
-`file_path` basename matches (LightRAG stores basenames, not full paths), which is the way to
-refresh a changed doc.
+`.md` file/dir; stored as `<name>.md` under `<graph>/inputs/`. LightRAG's doc_id is
+`md5(canonical stored path)` plus same-basename dedup (`lightrag/pipeline.py`), so re-inserting the
+same file is a no-op and changed content would otherwise keep the OLD copy alongside the new one:
+`replace=True` first deletes the documents whose stored `file_path` basename matches (LightRAG keeps
+basenames, not full paths) — that is the way to refresh a changed doc.
+
+## Verification (run this before trusting the system)
+
+1. `LIGHTRAG_MCP_VENV=<the venv that runs the server> ./install.sh --check` → must end
+   `OK: install looks healthy` (lightrag+mcp+pymupdf imports, four console scripts, DEEPSEEK key).
+2. `hermes mcp test lightrag-kg` → connects, lists the 11 tools above.
+3. `kg-list` equivalent: `kg_query -g <graph> "..." ` must resolve `<graph>` (registry + root) —
+   or call the `kg_list` tool; a missing graph is the usual symptom of a wrong `~/lightrag/kg` entry.
+4. `kg-query "<question>" -g <graph> -m naive` → prints `graph_dir:` + `=== CONTEXT (N chars) ===`.
+   If it raises a tiktoken connection error, the tokenizer cache is missing (see the tiktoken note).
+5. For background work: `kg_jobs` shows state running/done plus `docs_inserted`; the log is
+   `~/lightrag/jobs/<id>/job.log`.
 
 ## Pitfalls (each one actually bit this session)
 
@@ -319,7 +368,7 @@ refresh a changed doc.
    is empty instead of taking the first match.
 4. **GLM flash API quirks:** `reasoning_effort` accepts only low/high/max —
    `medium` returns HTTP 400 code 1210. Script calls should set it explicitly.
-5. **Proxy:** outbound script traffic needs `ALL_PROXY=socks5h://127.0.0.1:1080`
+5. **Proxy:** outbound script traffic needs `ALL_PROXY=socks5h://127.0.0.1:<PROXY_PORT>`
    (and `HTTPS_PROXY` for HF downloads). Run scripts with the hermes venv python
    (requests + PySocks available there). Exception: deepseek-chat direct (no
    proxy) works — api.deepseek.com needs no PySocks.
@@ -330,11 +379,14 @@ refresh a changed doc.
    Two books both containing `ch04.md` collide -> the whole merged insert
    becomes "no new unique documents" and silently writes nothing. Fix: give
    each source unique basenames per book (e.g. `ptw__ch04.md`, `exo__ch04.md`).
-8. **KG builds must run under the hermes venv python** — system python3 lacks
-   torch; only `~/.hermes/hermes-agent/venv/bin/python` has lightrag+torch+e5.
-9. **OOM on 9.7GB VM:** default LightRAG concurrency (4) with e5 embeddings
-   got the process SIGKILLed (exit 137). Set `llm_model_max_async=2,
-   embedding_func_max_async=2`. Incremental insert resumes after crashes
+8. **A `kg-*` script must run on an interpreter that has lightrag+torch+pymupdf** — not
+   any python. On this box that is `~/.hermes/mcp-venv` (the same one the MCP server runs on);
+   `~/.hermes/hermes-agent/venv` is the legacy fallback in `kg_common.py` (`HERMES_PY`), and
+   system `python3` has no torch at all. Picking an interpreter because of its path instead of
+   probing the imports is what produced the two-venv drift above.
+9. **OOM (on the old 9.7 GB VM; this box has 30 GB):** LightRAG's default concurrency (4)
+   with e5 embeddings got the process SIGKILLed (exit 137). 2/2 is now the code default
+   (`kg_common.py:build_rag`), so nothing needs setting by hand. Incremental insert resumes after crashes
    (docs keep processed status; failed docs retried on re-run).
 10. **Cross-contamination of bookkeeping stores after crashes** — kv_store_*
     can contain foreign doc rows after OOM-killed runs, but graphml+vdb (the
@@ -347,7 +399,7 @@ refresh a changed doc.
 - `references/kg-embedding-local.md` — local embedding setup, model comparison, validated integration snippets
 - `references/kg-eval-runs.md` — eval-run scripts and worked example
 - `references/eval-report-format.md` — deliverable report format rules
-- `references/persian-pdf-report.md` — RTL PDF recipe (fonts, weasyprint, Bale delivery)
+- `references/persian-pdf-report.md` — RTL PDF recipe (fonts, weasyprint, the messaging platform delivery)
 - `references/lightrag-tutorial-pieces.md` — reusable blocks for tutorial PDFs
 - `references/choose-your-wow-noagent-log.md` — no-agent generation run log: ToC-vs-heading cutting bug, reasoning-model empty-output trap, silent-scan hole, real numbers
 - `references/scale-pipeline-design.md` — volume architecture: MCP decision framework, dual intake, OCR routing, prototype gate (Choose Your WoW = first prototype data point)
