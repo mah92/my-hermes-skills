@@ -240,6 +240,12 @@ on the profile side, as a thin shim over `kg-ask`.
   3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
   4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
   5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
+
+  Rehearsed for real on 2026-09-23 on this box with a clean venv (`/tmp/fresh/venv`, since removed):
+  HTTPS clone of tag v0.2.0 -> `install.sh` (~6.5 min, 1.7 GB with the CPU torch wheel) ->
+  `--check` OK (lightrag 1.5.7, mcp 1.30, pymupdf, all four console scripts) -> `kg-query` returned
+  29,668 chars of context -> `kg-mcp` served 11 tools and `kg_list` saw kg_nav. Nothing needs a key
+  or a running Hermes to pass those steps; only the MCP registration writes config.yaml.
 - **`tiktoken` reaches an Azure blob that this box cannot route to** (`openaipublic.blob.core
 .windows.net`, errno 101) — LightRAG builds its tokenizer at load time, so every entry point must
 set `TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache` (pre-populated) or it dies with a connection
