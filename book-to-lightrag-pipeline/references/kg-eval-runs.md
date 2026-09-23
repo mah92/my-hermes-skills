@@ -3,10 +3,10 @@
 Session-specific scripts from the 2026-09-11 validation runs (PTW + ExO).
 They live in <WORKDIR>/booktest/ and are referenced by the pipeline SKILL.md.
 
-## kg_fetch_context.py — context-only retrieval (no LLM answer)
+## `kg-query` — context-only retrieval (no LLM answer)  [was `kg_fetch_context.py`]
 
 ```
-<HERMES_VENV>/bin/python kg_fetch_context.py <graph_dir_name> "<question>" [mode]
+<HERMES_VENV>/bin/python kg-query "<question>" -g <graph_dir_name> -m <mode>
 ```
 
 - `<graph_dir_name>`: kg_ptw | kg_exo | kg_merged (working_dir under <WORKDIR>/booktest/)
@@ -19,10 +19,10 @@ They live in <WORKDIR>/booktest/ and are referenced by the pipeline SKILL.md.
 - Cap to ~12K chars per question (~4K prompt tokens) — quality plateaus beyond
   that and keeps the answer run cheap.
 
-## kg_query_test.py — full query+answer smoke test per graph
+## `kg-ask` — full query+answer smoke test per graph  [was `kg_query_test.py`]
 
 ```
-<HERMES_VENV>/bin/python kg_query_test.py <graph_dir_name>
+<HERMES_VENV>/bin/python kg-ask "<question>" -g <graph_dir_name>
 ```
 
 Runs the per-graph question set through hybrid and mix modes and prints
@@ -82,7 +82,7 @@ also ran against kg_merged (BOTH books in one graph, 1703 ent/2222 rel), and
 the PDF gained a section "۵. پاسخ‌های گراف ترکیبی" between the single-book
 answers and the conclusion. Renumber later sections (۶ conclusion, ۷ stats).
 
-- Context fetch: same kg_fetch_context.py but `mode=naive` against kg_merged;
+- Context fetch: same `kg-query` but `mode=naive` against kg_merged;
   hybrid fails there too with a dummy LLM (keyword extraction needs a real
   model). Cap 12K chars as usual.
 - Answers via the same direct deepseek-chat call; prompts explicitly state

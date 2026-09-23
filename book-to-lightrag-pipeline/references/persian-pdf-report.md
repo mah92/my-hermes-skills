@@ -53,7 +53,7 @@ For any "same question, N experimental conditions" comparison:
 - Final deliverable: the PDF, sent via messaging-platform sendDocument to the owner.
 
 ## Fair-run harness pattern
-- Fetch each condition's context FIRST via `kg_fetch_context.py <graph>
+- Fetch each condition's context FIRST via `kg-query
   <question> naive` (naive works with a dummy llm func; hybrid needs a real
   LLM for keyword extraction and fails with dummy).
 - Answer via ONE direct deepseek-chat call per condition (~5K tokens each,

@@ -121,7 +121,7 @@ through deepseek).
 ## Working dir layout (2026-09-11 state)
 `<WORKDIR>/booktest/` — kg_build3.py (build kg_ptw/kg_exo/kg_merged),
 kg_build_merged.py (merged-only build with unique basenames via kg_input/
-staging dirs), kg_fetch_context.py (context-only query), kg_query_test.py
+staging dirs), `kg-query` (context-only query), `kg-ask` (query+answer)
 (6-question smoke test), fair_run.py + fair_merged_run.py + fair_ledger.json
 (the 6-arm A/B harness), report4.html/report4.pdf (delivered Persian PDF
 report), local_embed.py (embedding fn), embed_compare.py (model comparison).

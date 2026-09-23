@@ -133,9 +133,9 @@ batch; expect per-doc timeouts → retry passes (purge non-processed doc_status,
 ainsert; a `dup-*` doc-id class appears after retries — purge by id prefix only
 after confirming the real `doc-*` entry is processed). Seed scripts:
 `/home/oem/booktest/` (`kg_index.py`, `kg_retry*.py`, `local_embed.py`,
-`kg_fetch_context.py`, `compare3.py`, `compare_round2.py`, `kg_multihop_test.py`).
+`kg-query` (was `kg_fetch_context.py`), `compare3.py`, `compare_round2.py`, `kg_multihop_test.py`).
 
-**Querying:** `kg_fetch_context.py <graph> <question> naive` — pure vector search,
+**Querying:** `kg-query "<question>" -g <graph> -m naive` — pure vector search,
 works with a dummy LLM func (no LLM cost). `hybrid` needs a real LLM for two-level
 keyword extraction (hl/ll keywords; local=entities, global=topics). Cap retrieved
 context to ~12K chars before handing to an answering model.
@@ -144,7 +144,7 @@ context to ~12K chars before handing to an answering model.
 
 Validated pattern (drone-company strategy questions, 2026-09-11):
 
-1. Fetch context per question: `kg_fetch_context.py <graph> <question> naive`.
+1. Fetch context per question: `kg-query "<question>" -g <graph> -m naive`.
 2. Answer with DIRECT deepseek-chat calls (~5K tokens per answer, <15s).
    Do NOT deliver long inline context through delegate_task/subagents — the
    hosted model's 90s non-streaming timeout kills every such run (failed 7x
@@ -216,13 +216,25 @@ The generation prompt must include "do not rewrite LaTeX" so chapters keep formu
 ### Install shape (one venv, one package, then a skill)
 
 `mah92/lightrag-mcp` -> `./install.sh` creates ONE venv (`~/.hermes/lightrag-mcp-venv`) holding both
-the MCP server and the CLI — `kg-mcp`, `kg-query`, `kg-answer`, `kg-book`. Do not split them across
+the MCP server and the CLI — `kg-mcp`, `kg-query`, `kg-ask`, `kg-add-book`. Do not split them across
 two interpreters: that is how `lightrag` went missing while `kg_create`/`kg_list` kept working.
 Register with `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp`. The skill itself is the
 operating manual and stays in the skills collection; persona/profile glue (persona name, persona
 text, chat ids, graph choice — e.g. `askar.py` + `personas/askar.txt`) stays OUT of both repos,
-on the profile side, as a thin shim over `kg-answer`.
+on the profile side, as a thin shim over `kg-ask`.
 
+- **Canonical names (one operation, one name):** MCP tools use underscores, the CLI the same name with
+  hyphens. `kg_query`/`kg-query` = retrieve context only (no answer LLM — cheap, safe for grounding);
+  `kg_ask`/`kg-ask` = retrieve + answer with `[ref N]` citations (add `--persona-file`/`--name` for a
+  persona); `kg_add_book`/`kg-add-book` = PDF -> skill md -> graph (long: `background=True` + `kg_jobs`);
+  `kg_add_markdown`, `kg_add_repo`, `kg_register`, `kg_delete`, `kg_list`, `kg_setup` are MCP-only;
+  `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
+  `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
+- **Skill-first install on a fresh machine:** install ONLY the skill; it drives the repo (never vendor
+  code into a skill): (1) install/copy this skill; (2) `git clone git@github.com:mah92/lightrag-mcp.git
+  && cd lightrag-mcp && ./install.sh` (pin a release tag for reproducibility); (3) ASK THE USER before
+  `hermes mcp add lightrag-kg --command ~/.hermes/lightrag-mcp-venv/bin/kg-mcp` (it edits config.yaml);
+  (4) `./install.sh --check` then `kg-query "test" -g <graph>`; (5) build or register a graph.
 - **`tiktoken` reaches an Azure blob that this box cannot route to** (`openaipublic.blob.core
 .windows.net`, errno 101) — LightRAG builds its tokenizer at load time, so every entry point must
 set `TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache` (pre-populated) or it dies with a connection
@@ -230,7 +242,7 @@ error. `kg_common.py` sets it on import for all `kg-*` scripts and the server; t
 scripts each did it privately, which is why only they worked.
 - **Long book jobs: `kg_add_book(..., background=True)`** returns a job id at once (log +
 `job.json` under `~/lightrag/jobs/<id>/`, poll with the `kg_jobs` tool, the state file survives an
-MCP restart). The job body is `kg_book.py`, which is resumable — an existing extraction, an
+MCP restart). The job body is `kg_add_book.py`, which is resumable — an existing extraction, an
 already-generated skill and PROCESSED documents are all skipped, so a crash costs only the gaps.
 
 ## MCP server (lightrag-mcp / `lightrag-kg`) — what breaks and how to reload

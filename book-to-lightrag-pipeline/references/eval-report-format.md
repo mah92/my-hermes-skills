@@ -34,7 +34,7 @@ json.dump(ledger, open("fair_ledger.json","w"))
 
 Real numbers (deepseek-chat, temp 0.3, 12K-char context): no-ref answers ~110 prompt / ~800-1000 completion tokens, 5-7s; with-graph answers ~2.8K prompt / ~2.2K completion tokens, 11-13s. With-graph answers were ~2x output volume.
 
-Context fetch: `kg_fetch_context.py <graph> <question> naive` (naive mode needs only a dummy LLM func; hybrid needs a real LLM for keyword extraction). Trim context to ~12K chars. Run the with-graph arms DIRECTLY against deepseek with the context inlined — do not route through subagents (host-model 90s non-streaming timeout kills them).
+Context fetch: `kg-query "<question>" -g <graph> -m naive`  [was `kg-query "<question>" -g <graph> -m naive`] (naive mode needs only a dummy LLM func; hybrid needs a real LLM for keyword extraction). Trim context to ~12K chars. Run the with-graph arms DIRECTLY against deepseek with the context inlined — do not route through subagents (host-model 90s non-streaming timeout kills them).
 
 ## Persian RTL PDF recipe (weasyprint, validated)
 
