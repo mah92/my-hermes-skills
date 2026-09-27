@@ -203,9 +203,14 @@ PY
 
 echo "==> 5/6 gateway service"
 if [[ "$NO_START" -eq 1 ]]; then
-  echo "   (--no-start) install later: $HERMES -p $NAME gateway install"
+  echo "   (--no-start) install later: $HERMES -p $NAME gateway install --start-now --start-on-login </dev/null"
 else
-  "$HERMES" -p "$NAME" gateway install 2>&1 | tail -2
+  # --start-now/--start-on-login AND stdin from /dev/null: `hermes gateway install`
+  # prompts on a TTY ("Start the gateway now...?") and only skips the prompt when
+  # STDIN is not a tty. This pipeline keeps stdin as the terminal while sending the
+  # prompt into the pipe tail is holding — so the prompt is invisible and the run
+  # looks frozen at 5/6 forever. Never call install without both flags + </dev/null.
+  "$HERMES" -p "$NAME" gateway install --start-now --start-on-login </dev/null 2>&1 | tail -2
   echo "   waiting for the platform to connect (up to 90s)..."
   for _ in $(seq 1 18); do sleep 5; grep -qa 'Connected as' "$PROF/logs/agent.log" 2>/dev/null && break; done
   grep -qa 'Connected as' "$PROF/logs/agent.log" 2>/dev/null \
@@ -225,5 +230,5 @@ if ! bash "$SCRIPT_DIR/verify-bot.sh" "$NAME"; then
     exit 1
   fi
   echo "NOTE: --no-start, so the pending service/platform/state.db checks are expected until you run:"
-  echo "      $HERMES -p $NAME gateway install"
+  echo "      $HERMES -p $NAME gateway install --start-now --start-on-login </dev/null"
 fi

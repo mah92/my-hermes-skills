@@ -1,7 +1,7 @@
 ---
 name: hermes-bot-provisioning
 description: "Use when adding/removing a Bale or Soroush bot."
-version: 1.2.0
+version: 1.2.1
 author: Hermes Agent
 license: MIT
 platforms: [linux]
@@ -86,7 +86,10 @@ not appear in `ps`.) What it does, in order:
    `terminal.cwd` = the workspace; with `--sandbox-image`, the docker backend.
    The whole `plugins:` block is replaced, so host-level plugin settings do not
    carry over.
-5. `hermes -p <name> gateway install`, then waits for the platform to connect.
+5. `hermes -p <name> gateway install --start-now --start-on-login </dev/null`, then
+   waits for the platform to connect. Both flags AND the `/dev/null` stdin are
+   mandatory here: the install command prompts on a TTY and only skips the prompt
+   when STDIN is not a tty (see pitfall 12).
 6. Runs `scripts/verify-bot.sh` and exits non-zero if it reports failures
    (except with `--no-start`, where the not-yet-started checks are printed as a
    NOTE).
@@ -199,3 +202,13 @@ files written into bind mounts to stay yours.
     `getMe`; a connection line with `@ (id=)` means the token is wrong.
 11. **Verify from the bot's own config**, not with a hand-typed command: run
     `verify-bot.sh` — it exercises the profile's actual files and the platform.
+12. **`gateway install` (step 5/6) freezes forever on a terminal**: on a TTY the
+    command asks `Start the gateway now after installing the service?` and returns
+    the default only when STDIN is *not* a tty. Piping stdout (`| tail -2`) to keep
+    the output short leaves stdin attached to the terminal, and the prompt itself
+    goes into the pipe — so the screen shows nothing and the script sits there
+    indefinitely (looks like a hang with no message). Always call it as
+    `hermes gateway install --start-now --start-on-login </dev/null`; with stdin
+    closed the prompts are skipped and the defaults (start now, start on login) apply.
+    Recovery for a hung run: `kill <hermes install pid>` — `set -o pipefail` aborts
+    the wrapper — then run the install line above before `verify-bot.sh <name>`.
