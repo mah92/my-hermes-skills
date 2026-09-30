@@ -111,7 +111,7 @@ answer path.
 - **Bake-off discipline (owner-demanded, before adopting ANY retrieval design):**
   blind paraphrased questions + fixed golden chapters + ≥2 independent judges +
   metrics = answer quality, context tokens, golden-chapter coverage. Present results
-  as an IMAGE (table-as-image pattern), never a markdown table in the messaging platform. Get owner
+  as an IMAGE (table-as-image pattern), never a markdown table in Bale. Get owner
   sign-off on numbers before wiring a layer in.
 
 ## Knowledge-graph enrichment layer (LightRAG)
@@ -176,7 +176,7 @@ Deliverable recipes (scripts + templates in references):
 - Report FORMAT rules (verbatim questions, verbatim answers, per-answer cost
   banners — user corrected all three): `references/eval-report-format.md`
 - Persian PDFs: reportlab cannot shape RTL glyphs. Working stack = hand-written
-  RTL HTML (Vazir font via file://$HOME/.fonts/vazir/, dir=rtl) rendered with
+  RTL HTML (Vazir font via file:///home/oem/.fonts/vazir/, dir=rtl) rendered with
   weasyprint (pip-installed into the hermes venv). Verify rendering by rasterizing
   pages and inspecting with vision. `references/persian-pdf-report.md`
 - Tutorial/explainer PDFs (e.g. "short LightRAG tutorial") are a separate
@@ -233,7 +233,7 @@ default and `LIGHTRAG_MCP_VENV=<path>` overrides it; the pre-existing install on
 `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp`, or the form this box uses,
 `--command <venv>/bin/python --args <repo>/src/lightrag_kg_mcp/server.py`. The skill itself is the
 operating manual and stays in the skills collection; persona/profile glue (persona name, persona
-text, chat ids, graph choice — e.g. the profile-local persona shim) stays OUT of both repos, on
+text, chat ids, graph choice — e.g. `askar.py` + `personas/askar.txt`) stays OUT of both repos, on
 the profile side, as a thin shim over `kg-ask`.
 
 - **Canonical names (one operation, one name):** MCP tools use underscores, the CLI the same name with
@@ -355,6 +355,25 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 5. For background work: `kg_jobs` shows state running/done plus `docs_inserted`; the log is
    `~/lightrag/jobs/<id>/job.log`.
 
+## Staged ingest jobs (kg_ingest / kg_rollback)
+
+The MCP exposes a thin orchestration layer for corpora that are not a single PDF:
+
+- `kg_ingest(graph, steps, title, kind, backup, workdir)` — `steps` is a JSON array
+  of `{"name", "cmd", "inserts"}` run in order (the contract is
+  collect -> ASR -> correct -> English -> skill -> graph). The tool only writes the
+  spec and starts `~/lightrag/kg_mcp/kg_ingest.py`; the volatile machinery stays in
+  the scripts each step calls. A graph backup runs before/after, and the documents
+  named in `inserts` are written to a per-job manifest.
+- `kg_jobs` — shows ingest jobs alongside `kg_add_book` jobs (same
+  `~/lightrag/jobs/<id>/{job.json,job.log}` store, states queued/running/done/failed).
+- `kg_rollback(job_id, dry_run)` — deletes exactly the documents that run inserted
+  (by file name), leaving the rest of the graph untouched.
+
+Keep the surface thin on purpose: an API change (yt-dlp, a proxy pool, a new ASR
+model) must never require a new MCP release — it belongs in the step scripts and in
+the skills, and the server recovers the new tools only after its gateway restarts.
+
 ## Pitfalls (each one actually bit this session)
 
 1. **Reasoning models burn `max_tokens` on thinking.** Symptom: HTTP 200,
@@ -369,7 +388,7 @@ basenames, not full paths) — that is the way to refresh a changed doc.
    is empty instead of taking the first match.
 4. **GLM flash API quirks:** `reasoning_effort` accepts only low/high/max —
    `medium` returns HTTP 400 code 1210. Script calls should set it explicitly.
-5. **Proxy:** outbound script traffic needs `ALL_PROXY=socks5h://127.0.0.1:<PROXY_PORT>`
+5. **Proxy:** outbound script traffic needs `ALL_PROXY=socks5h://127.0.0.1:1080`
    (and `HTTPS_PROXY` for HF downloads). Run scripts with the hermes venv python
    (requests + PySocks available there). Exception: deepseek-chat direct (no
    proxy) works — api.deepseek.com needs no PySocks.
@@ -400,7 +419,7 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 - `references/kg-embedding-local.md` — local embedding setup, model comparison, validated integration snippets
 - `references/kg-eval-runs.md` — eval-run scripts and worked example
 - `references/eval-report-format.md` — deliverable report format rules
-- `references/persian-pdf-report.md` — RTL PDF recipe (fonts, weasyprint, the messaging platform delivery)
+- `references/persian-pdf-report.md` — RTL PDF recipe (fonts, weasyprint, Bale delivery)
 - `references/lightrag-tutorial-pieces.md` — reusable blocks for tutorial PDFs
 - `references/choose-your-wow-noagent-log.md` — no-agent generation run log: ToC-vs-heading cutting bug, reasoning-model empty-output trap, silent-scan hole, real numbers
 - `references/scale-pipeline-design.md` — volume architecture: MCP decision framework, dual intake, OCR routing, prototype gate (Choose Your WoW = first prototype data point)

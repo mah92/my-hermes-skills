@@ -6,7 +6,7 @@ Reuse for any future "explain this tool" PDF in Persian.
 ## Graphviz diagrams (need `sudo apt-get install graphviz` for the `dot` binary)
 
 Three diagrams that carried the explanation — sources live in
-`<WORKDIR>/booktest/{diag_pipeline,diag_graph,diag_query}.dot`, rendered with:
+`/home/oem/booktest/{diag_pipeline,diag_graph,diag_query}.dot`, rendered with:
 
 ```
 dot -Tpng -Gdpi=140 diag_X.dot -o diag_X.png

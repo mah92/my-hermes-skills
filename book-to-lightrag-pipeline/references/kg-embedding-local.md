@@ -15,7 +15,7 @@ actually executed on this host unless marked otherwise.
   a graph DB server); fine for org-scale, overkill here.
 
 ## Wiring a local embedding function (the part that failed twice)
-`lightrag.hku` 1.5.7 (installed into agent venv). Its built-in `hf` binding uses
+`lightrag.hku` 1.5.7 (installed into hermes venv). Its built-in `hf` binding uses
 `AutoModelForCausalLM` (a GENERATION model) — wrong tool for embedders and it
 double-loads a big model on a 9GB-RAM CPU box.
 
@@ -58,7 +58,7 @@ Model card: https://huggingface.co/heydariAI/persian-embeddings
 (e5: https://huggingface.co/intfloat/multilingual-e5-base)
 
 HF download note: plain `ALL_PROXY` was not enough for transformers hub
-downloads; `HTTPS_PROXY=socks5h://127.0.0.1:<PROXY_PORT>` worked. (hf-mirror.com
+downloads; `HTTPS_PROXY=socks5h://127.0.0.1:1080` worked. (hf-mirror.com
 endpoint resolved via curl but failed inside transformers — don't bother.)
 
 ## Extraction LLM side
@@ -106,7 +106,7 @@ on 2 book-specific + 2 cross-book questions per graph; expect 4-16s/graph on
 CPU. Cross-book merge works through shared entities and contrast questions
 ("what do both books say about X") return genuine both-book answers.
 
-**Voice/document note (messaging platform).** Voice .ogg attachments may actually be other
+**Voice/document note (Bale).** Voice .ogg attachments may actually be other
 binaries (an EPUB arrived as tmp*.ogg); `file` the path before assuming audio.
 
 **naive vs hybrid retrieval for context-only fetches.** When pulling context
@@ -119,7 +119,7 @@ through deepseek).
 
 
 ## Working dir layout (2026-09-11 state)
-`<WORKDIR>/booktest/` — kg_build3.py (build kg_ptw/kg_exo/kg_merged),
+`/home/oem/booktest/` — kg_build3.py (build kg_ptw/kg_exo/kg_merged),
 kg_build_merged.py (merged-only build with unique basenames via kg_input/
 staging dirs), `kg-query` (context-only query), `kg-ask` (query+answer)
 (6-question smoke test), fair_run.py + fair_merged_run.py + fair_ledger.json

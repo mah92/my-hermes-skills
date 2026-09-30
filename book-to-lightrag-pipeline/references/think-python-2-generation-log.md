@@ -5,7 +5,7 @@ Full run of the book-to-skill workflow on *Think Python 2e* (Allen B. Downey, O'
 actually happened and what shipped; reuse it as a size/shape benchmark.
 
 ## Source & Extraction
-- Source: `<WORKDIR>/booktest/think_python2.pdf` → pypdf, BOOK_TYPE=text.
+- Source: `/home/oem/booktest/think_python2.pdf` → pypdf, BOOK_TYPE=text.
 - `metadata.json` deltas: 21 chapters detected (`chapters_method: numeric`), ToC present,
   images_dropped 0. Workdir was PID-suffixed: `/tmp/book_skill_work-<pid>/`.
 

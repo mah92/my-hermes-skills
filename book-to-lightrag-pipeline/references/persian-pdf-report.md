@@ -1,7 +1,7 @@
 # Persian RTL PDF report recipe (validated 2026-09-11)
 
 Full validated path for producing Persian (Farsi) RTL PDF reports on this box
-and delivering them via the messaging platform. Use this whenever a deliverable report must be a
+and delivering them via Bale. Use this whenever a deliverable report must be a
 PDF in Persian.
 
 ## Why not reportlab
@@ -9,26 +9,26 @@ reportlab cannot shape Arabic-script glyphs — Persian text comes out
 disconnected/reversed. The bundled pdf skill's reportlab path is Latin-only in
 practice. Do NOT use it for Persian.
 
-## Working stack: weasyprint (installed in agent venv)
+## Working stack: weasyprint (installed in hermes venv)
 ```bash
-<HERMES_VENV>/bin/pip install weasyprint   # pulled pango deps cleanly
-<HERMES_VENV>/bin/python -c "import weasyprint"  # verify
+~/.hermes/hermes-agent/venv/bin/pip install weasyprint   # pulled pango deps cleanly
+~/.hermes/hermes-agent/venv/bin/python -c "import weasyprint"  # verify
 ```
 
-Fonts already on box (verified): `<HOME>/.fonts/vazir/Vazir-Regular.ttf`
+Fonts already on box (verified): `/home/oem/.fonts/vazir/Vazir-Regular.ttf`
 and `Vazir-Bold.ttf` (copies also in `~/hermes_files/fonts/`).
 
 ## Pattern
 1. Write HTML: `<html lang="fa" dir="rtl">`, `@font-face` with
-   `url('file://<HOME>/.fonts/vazir/Vazir-Regular.ttf')` (+ Bold),
+   `url('file:///home/oem/.fonts/vazir/Vazir-Regular.ttf')` (+ Bold),
    `body { font-family:'Vazir'; direction:rtl; }`.
 2. Render: `from weasyprint import HTML; HTML('/abs/path/report.html').write_pdf('/abs/path/report.pdf')`
    — absolute paths required (weasyprint resolves relative badly).
 3. Verify visually: `pdf_page_image.py report.pdf --pages 1-3 --dpi 110
    --out-dir imgs/` then `vision_analyze` each page — check glyph shaping
    (connected letters), RTL alignment, no tofu, tables intact.
-4. Deliver via the messaging platform: `POST https://<PLATFORM_API>/bot$BOT_TOKEN/sendDocument`
-   with `data={'chat_id': <OWNER_CHAT_ID>, 'caption': ...}` and
+4. Deliver: Bale `POST https://tapi.bale.ai/bot$BALE_BOT_TOKEN/sendDocument`
+   with `data={'chat_id': <owner>, 'caption': ...}` and
    `files={'document': (name, fh, 'application/pdf')}` — verified HTTP 200.
    Page ~ every long section with `<div class="pagebreak"></div>`.
 
@@ -50,7 +50,7 @@ For any "same question, N experimental conditions" comparison:
 - Questions quoted VERBATIM in full (in a callout box), never paraphrased.
 - Answers included VERBATIM in full — never summarized. Summaries were
   rejected twice; the report grew 42KB -> 95KB when fixed.
-- Final deliverable: the PDF, sent via messaging-platform sendDocument to the owner.
+- Final deliverable: the PDF, sent via Bale sendDocument to the owner.
 
 ## Fair-run harness pattern
 - Fetch each condition's context FIRST via `kg-query

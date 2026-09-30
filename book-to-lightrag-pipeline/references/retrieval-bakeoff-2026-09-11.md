@@ -44,7 +44,7 @@ entities Dependency Risk + Cross-Team Dependencies (defined in ch07, used in
 ch23) — cross-chapter synthesis no single chapter file provides. The keyword
 router reached only ch23.
 
-## Files (session working dir <WORKDIR>/booktest/)
+## Files (session working dir /home/oem/booktest/)
 - method_a_keywords.py — builds keyword_index.json (70 terms → chapters), matcher
 - compare3.py — full harness: methods A/C/D + answering + judging + summary
   (requires QueryParam import at module level; CHAPTER_FILES needs both full
@@ -53,7 +53,7 @@ router reached only ch23.
 - kg_index.py / kg_retry2.py / kg_retry3.py / kg_clean_status.py — indexing + retry passes
 - kg_status.py / kg_check*.py — status/verification probes
 - infographic/compare_table.png + render_table.py — results table image
-  (sent via platform sendPhoto + sendDocument)
+  (sent via Bale sendPhoto + sendDocument)
 
 ## Owner preferences encoded in this work
 - No OpenAI/GPT embeddings — local model (e5/heydariAI class) is a hard rule.

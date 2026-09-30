@@ -81,6 +81,6 @@ partial failure, skip non-empty files and regenerate only empty ones (skip list)
 Chapter files preserve the authors' exact terminology (goal diagram, method prison,
 process dissonance, generalizing specialist, the 6 DAD lifecycles), include
 Reference Tables for goal-diagram options, anti-patterns, decision-style takeaways.
-Sample chapter sent to owner via messaging-platform sendDocument (.txt, 13.3KB) — delivered.
+Sample chapter sent to owner via Bale sendDocument (.txt, 13.3KB) — delivered.
 SKILL.md frontmatter/structure validated by reading back; `--skip SKILL.md` used
 for regeneration runs so a good master isn't overwritten.

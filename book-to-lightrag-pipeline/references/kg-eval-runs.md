@@ -6,10 +6,10 @@ Session-specific scripts from the 2026-09-11 validation runs (PTW + ExO).
 ## `kg-query` — context-only retrieval (no LLM answer)  [was `kg_fetch_context.py`]
 
 ```
-<HERMES_VENV>/bin/python kg-query "<question>" -g <graph_dir_name> -m <mode>
+/home/oem/.hermes/hermes-agent/venv/bin/python kg-query "<question>" -g <graph_dir_name> -m <mode>
 ```
 
-- `<graph_dir_name>`: kg_ptw | kg_exo | kg_merged (working_dir under <WORKDIR>/booktest/)
+- `<graph_dir_name>`: kg_ptw | kg_exo | kg_merged (working_dir under /home/oem/booktest/)
 - mode: `naive` (pure vector; recommended — works with a dummy LLM func) or
   `hybrid` (needs a real LLM for keyword extraction; fails with dummy func).
 - Prints LightRAG's context block (Document Chunks JSON with reference_ids,
@@ -22,7 +22,7 @@ Session-specific scripts from the 2026-09-11 validation runs (PTW + ExO).
 ## `kg-ask` — full query+answer smoke test per graph  [was `kg_query_test.py`]
 
 ```
-<HERMES_VENV>/bin/python kg-ask "<question>" -g <graph_dir_name>
+/home/oem/.hermes/hermes-agent/venv/bin/python kg-ask "<question>" -g <graph_dir_name>
 ```
 
 Runs the per-graph question set through hybrid and mix modes and prints
@@ -31,13 +31,13 @@ latency + answer head per mode. Question sets are defined inline in TESTS.
 ## fair_run.py — the fairness harness (identical model for all arms)
 
 ```
-<HERMES_VENV>/bin/python fair_run.py
+/home/oem/.hermes/hermes-agent/venv/bin/python fair_run.py
 ```
 
 - Arms defined in RUNS dict: <topic>_no_ref (general-knowledge prompt) and
   <topic>_graph (same question + inline retrieved context + citation rules).
 - One deepseek-chat call per arm (temperature 0.3, max_tokens 4000, no memory).
-- Writes <WORKDIR>/booktest/fair_<arm>.md plus fair_ledger.json:
+- Writes /home/oem/booktest/fair_<arm>.md plus fair_ledger.json:
   {arm: {latency_s, prompt_tokens, completion_tokens, total_tokens}}.
 - The ledger goes verbatim into the user-facing PDF report next to each
   answer (user requirement: per-question time/token, not aggregate).
@@ -45,15 +45,15 @@ latency + answer head per mode. Question sets are defined inline in TESTS.
 ## report4.html / report4.pdf — Persian RTL report template
 
 - Hand-written HTML, `dir="rtl"`, Vazir font loaded via
-  `file://<HOME>/.fonts/vazir/Vazir-Regular.ttf` (+Bold).
-- Render: `<HERMES_VENV>/bin/python -c "from weasyprint import
-  HTML; HTML('<WORKDIR>/booktest/report4.html').write_pdf('report4.pdf')"`
-- weasyprint is pip-installed in the agent venv; reportlab alone cannot
+  `file:///home/oem/.fonts/vazir/Vazir-Regular.ttf` (+Bold).
+- Render: `~/.hermes/hermes-agent/venv/bin/python -c "from weasyprint import
+  HTML; HTML('/home/oem/booktest/report4.html').write_pdf('report4.pdf')"`
+- weasyprint is pip-installed in the hermes venv; reportlab alone cannot
   shape Persian glyphs (do not use it for Persian text).
 - Verify by rasterizing (pdf skill: pdf_page_image.py --dpi 110) and
   inspecting the PNG with vision: check glyph shaping, RTL alignment, table
   columns, no tofu.
-- Deliver via messaging-platform sendDocument to the owner chat (configure your platform details).
+- Deliver via Bale sendDocument to the owner chat (see bale-direct-api skill).
 
 ## Report content rules (user-corrected three times — binding)
 
@@ -100,7 +100,7 @@ answers and the conclusion. Renumber later sections (۶ conclusion, ۷ stats).
   full answers under a header explaining the merged condition, §6 conclusion
   (+ paragraph noting the merged cost/coverage finding), §7 infra stats.
 
-Rebuild script: `<WORKDIR>/booktest/build_report.py` (md→html conversion +
+Rebuild script: `/home/oem/booktest/build_report.py` (md→html conversion +
 section splice; sandbox drops state between tool calls, so keep the
 converter in a file on disk, not inline in the call). After adding sections,
 re-check h2 markers before splicing — section numbering shifts (old

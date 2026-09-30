@@ -40,11 +40,11 @@ Context fetch: `kg-query "<question>" -g <graph> -m naive`  [was `kg-query "<que
 
 reportlab cannot shape Persian glyphs. Working path:
 
-1. `pip install weasyprint` into the agent venv (worked on this box; pango system deps present).
-2. Vazir fonts already at `<HOME>/.fonts/vazir/Vazir-{Regular,Bold}.ttf`.
+1. `pip install weasyprint` into the hermes venv (worked on this box; pango system deps present).
+2. Vazir fonts already at `/home/oem/.fonts/vazir/Vazir-{Regular,Bold}.ttf`.
 3. Build HTML: `<html lang="fa" dir="rtl">`, `@font-face` pointing at the TTFs via `file:///`, `body { font-family:'Vazir'; direction:rtl; }`. Navy/red heading theme, `.box` callouts, `.lat` (yellow) cost banners, `.pagebreak { page-break-before: always; }` between major parts.
 4. Convert the verbatim markdown answers to HTML with a small converter: `#`/`##`/`###` headings, `- `/`N.` list items to `<li>`, `---` to `<hr>`, `>` to styled `<blockquote>`, `**bold**` and backtick-code inline. Escape first, then apply inline regexes.
 5. `python -c "from weasyprint import HTML; HTML('report.html').write_pdf('report.pdf')"`.
-6. Verify: render pages with the pdf skill's `pdf_page_image.py --pages 1,3,5` and inspect with vision_analyze (glyph shaping, RTL alignment, tofu check). Then deliver via the messaging platform `sendDocument`.
+6. Verify: render pages with the pdf skill's `pdf_page_image.py --pages 1,3,5` and inspect with vision_analyze (glyph shaping, RTL alignment, tofu check). Then deliver via Bale `sendDocument`.
 
 Reference outputs from the validated run: `booktest/report4.html`, `booktest/report4.pdf` (~8 pages, 76KB), `booktest/fair_*.md`, `booktest/fair_ledger.json`.
