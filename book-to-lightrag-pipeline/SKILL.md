@@ -355,24 +355,7 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 5. For background work: `kg_jobs` shows state running/done plus `docs_inserted`; the log is
    `~/lightrag/jobs/<id>/job.log`.
 
-## Staged ingest jobs (kg_ingest / kg_rollback)
-
-The MCP exposes a thin orchestration layer for corpora that are not a single PDF:
-
-- `kg_ingest(graph, steps, title, kind, backup, workdir)` — `steps` is a JSON array
-  of `{"name", "cmd", "inserts"}` run in order (the contract is
-  collect -> ASR -> correct -> English -> skill -> graph). The tool only writes the
-  spec and starts `~/lightrag/kg_mcp/kg_ingest.py`; the volatile machinery stays in
-  the scripts each step calls. A graph backup runs before/after, and the documents
-  named in `inserts` are written to a per-job manifest.
-- `kg_jobs` — shows ingest jobs alongside `kg_add_book` jobs (same
-  `~/lightrag/jobs/<id>/{job.json,job.log}` store, states queued/running/done/failed).
-- `kg_rollback(job_id, dry_run)` — deletes exactly the documents that run inserted
-  (by file name), leaving the rest of the graph untouched.
-
-Keep the surface thin on purpose: an API change (yt-dlp, a proxy pool, a new ASR
-model) must never require a new MCP release — it belongs in the step scripts and in
-the skills, and the server recovers the new tools only after its gateway restarts.
+## Staged ingest jobs (kg_add_videos / kg_add_sites / kg_rollback)
 
 ## Pitfalls (each one actually bit this session)
 
