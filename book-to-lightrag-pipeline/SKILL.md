@@ -357,6 +357,12 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 
 ## Staged ingest jobs (kg_add_videos / kg_add_sites / kg_rollback)
 
+## Reloading a graph after a corpus-wide text fix
+
+Never drive a bulk re-insert with `for f in inputs/*.md; do graph_refix.py $f; done`. LightRAG can wedge on one document (LLM retry storm) and the loop then sits for **hours writing nothing** while the graph stays stale. Use a runner that (a) gives every document a wall-clock budget, (b) kills the insert on timeout, (c) clears the stale `kv_store_doc_status.json` rows for that file before re-inserting, and (d) retries failures once at the end. On a graph of this size budget ~10-15 min per corpus document.
+
+Verify progress by activity, not by the loop still being alive: `find ~/lightrag/kg/<graph> -newermt '-20 minutes' -type f | wc -l` must be non-zero.
+
 ## Pitfalls (each one actually bit this session)
 
 1. **Reasoning models burn `max_tokens` on thinking.** Symptom: HTTP 200,
