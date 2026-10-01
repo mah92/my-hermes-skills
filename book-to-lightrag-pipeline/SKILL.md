@@ -363,6 +363,13 @@ Never drive a bulk re-insert with `for f in inputs/*.md; do graph_refix.py $f; d
 
 Verify progress by activity, not by the loop still being alive: `find ~/lightrag/kg/<graph> -newermt '-20 minutes' -type f | wc -l` must be non-zero.
 
+## Verify what is actually in a graph (and what makes re-inserts slow)
+
+- **Do not probe a graph by grepping the stored text.** `kv_store_full_docs.json` may hold a document in a differently escaped/normalised form, so a substring probe reports false negatives (a doc can look "missing" while it is fully present and retrievable). Trust `kv_store_doc_status.json` (status per file) and, for the decisive check, a retrieval query. To prove a re-insert really replaced old text, probe for a distinctive OLD string and a NEW string in `vdb_chunks.json` — that store holds the live chunk text, and 0/1 counts settle it.
+- **Re-insert cost is dominated by local storage, not the LLM.** As a graph grows, each document insert loads, merges and rewrites multi-hundred-MB JSON stores (a 100-doc graph had 210 MB relations + 118 MB entities + 151 MB LLM cache) and computes embeddings locally; measure `pcpu`, RSS and `/proc/<pid>/io` before blaming the model. When `kv_store_llm_response_cache.json` stops growing, the LLM is not the bottleneck — the merge/embed/write path is, and raising `LIGHTRAG_LLM_ASYNC` will not help.
+- **Corollary for planning:** re-inserting whole documents for a cosmetic text change costs ~10-16 min per large corpus document even with extraction cache hits. Repair the transcripts FIRST, then do one reload; never load, discover the defect, and reload again.
+- Stale `failed` rows can linger for documents that later inserted successfully (delete-then-insert creates a new doc id). Before reporting failures, confirm the doc's text is retrievable, then clear those rows.
+
 ## Pitfalls (each one actually bit this session)
 
 1. **Reasoning models burn `max_tokens` on thinking.** Symptom: HTTP 200,
