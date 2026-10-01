@@ -370,6 +370,15 @@ Verify progress by activity, not by the loop still being alive: `find ~/lightrag
 - **Corollary for planning:** re-inserting whole documents for a cosmetic text change costs ~10-16 min per large corpus document even with extraction cache hits. Repair the transcripts FIRST, then do one reload; never load, discover the defect, and reload again.
 - Stale `failed` rows can linger for documents that later inserted successfully (delete-then-insert creates a new doc id). Before reporting failures, confirm the doc's text is retrievable, then clear those rows.
 
+## Never hand-delete a doc_status row you have not proved redundant
+
+LightRAG keys a document by `compute_mdhash_id(content)` — a hash of the CONTENT, not a random id — and `kv_store_doc_status.json` is the only index that says a document exists. Clearing a `failed` row for a file whose content is already in the graph therefore ORPHANS it: retrieval still works, `full_docs` still lists it, but nothing tracks it any more (counts drift, and delete-by-file-name can no longer remove it).
+
+Rules learned the hard way:
+- A `failed` row is not proof that the document is missing. Confirm the document is retrievable (query it) and that its chunks are in `vdb_chunks.json` before touching the row.
+- If you do orphan a document, re-insert the same input file. The re-insert recomputes the same doc id and is an upsert (chunk counts stay identical — no duplicate copy); the delete step will report `not_found`, which is expected and harmless. Just let the insert finish so the status row comes back.
+- Prefer `graph_refix.py` (delete-by-file-name + insert) or re-insert through the runner; never edit status rows as a shortcut.
+
 ## Pitfalls (each one actually bit this session)
 
 1. **Reasoning models burn `max_tokens` on thinking.** Symptom: HTTP 200,
