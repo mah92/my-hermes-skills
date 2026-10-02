@@ -404,6 +404,14 @@ quirks) lives in the scripts the steps call, never in the server.
   `backup=""` skips it (right for throwaway test runs); any other string runs as your own command.
   `~/.hermes/scripts/kg_graph_backup.sh` is now a one-line wrapper that `exec`s the repo copy, so
   manual/cron use keeps working off a single implementation.
+- **Archive names are unique and phase-labelled:** `<graph>_<YYYYmmdd_HHMMSS>[_before|_after][_N].tar.gz`.
+  The old name was minute-precision (`..._HHMM`), so a job that finished inside one minute wrote
+  its before-snapshot and after-snapshot to the SAME path — the pre-run state (the one you would
+  restore) was silently overwritten by the post-run state. Now: second precision, `KG_BACKUP_LABEL`
+  (set by `kg_ingest.py` to before/after) and a collision counter. Retention keeps the 5 newest per
+  graph plus `.sha256` (`LIGHTRAG_KG_BACKUP_KEEP`, `LIGHTRAG_KG_BACKUP_DIR`). Verified 2026-10-02:
+  one job produced `kg_t3_..._095124_before.tar.gz` and `kg_t3_..._095124_after.tar.gz`, both
+  `gzip -t` clean; three same-second runs produced `..._100500`, `..._100500_1`, `..._100500_2`.
 - **Verified end to end 2026-10-02** (repo `0fda823`, live MCP): `kg_create` a temp graph →
   `kg_add_markdown` one note → `kg_add_videos` with a single step declaring
   `inserts=["stagetest-note.md"]` → job `done` with the manifest recorded → `kg_rollback(dry_run)`
