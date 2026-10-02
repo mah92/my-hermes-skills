@@ -385,10 +385,25 @@ quirks) lives in the scripts the steps call, never in the server.
   deletes exactly the documents a run inserted — matched by **basename** (LightRAG stores
   basenames, not full paths), so declare distinctive names or a generic one (`ch04.md`) can
   collide with an unrelated document already in the graph. A step's inserts are written to the
-  manifest even when that step exits non-zero, so always check `dry_run=true` first.
-- `backup` defaults to `bash ~/.hermes/scripts/kg_graph_backup.sh` and runs before and after the
-  job. It archives **every** graph under `~/lightrag/kg` (~25 s with a 100-doc graph present) and
-  keeps the 3 newest per graph; pass `backup=""` for a test run.
+  manifest even when that step exits non-zero, so always check `dry_run=true` first. Both the dry
+  run and a real run report **file names** (`would_remove` / `removed`, plus `count`); a real run
+  also returns `docs` with the `doc_id` and status per deletion. (Before the fix the real run
+  returned raw ids like `doc-<md5>:success` while the dry run returned file names.)
+- **`kg_jobs` prints the shape that matches the job kind** — book jobs carry `pdf` +
+  `docs_inserted`, staged jobs carry `kind`, `title`, `step`/`step_index`, `steps_total`,
+  `manifest` and `warnings` (previously every job got the book shape, so a staged job showed
+  `pdf: null` and hid its manifest). Jobs whose graph no longer exists are flagged
+  `"note": "graph no longer exists ..."` and skipped unless `include_stale=True`, and
+  `kg_delete(..., delete_data=true)` removes that graph's job records with the data (a job whose
+  graph is gone can never be rolled back).
+- `backup` defaults to the `kg_graph_backup.sh` that ships **inside the repo** (resolved like every
+  other helper) and archives **only this graph**, before and after the job. The exit code is
+  checked: `job.json` carries `backup_before`/`backup_after` (`ok` / `failed (exit N)` / `skipped`)
+  and a failure is appended to `warnings` — before the fix a missing script produced two silent
+  `No such file or directory` failures while the job still reported `done`, with no backup on disk.
+  `backup=""` skips it (right for throwaway test runs); any other string runs as your own command.
+  `~/.hermes/scripts/kg_graph_backup.sh` is now a one-line wrapper that `exec`s the repo copy, so
+  manual/cron use keeps working off a single implementation.
 - **Verified end to end 2026-10-02** (repo `0fda823`, live MCP): `kg_create` a temp graph →
   `kg_add_markdown` one note → `kg_add_videos` with a single step declaring
   `inserts=["stagetest-note.md"]` → job `done` with the manifest recorded → `kg_rollback(dry_run)`
@@ -396,12 +411,23 @@ quirks) lives in the scripts the steps call, never in the server.
   `kv_store_doc_status.json` went empty (the input `.md` file stays on disk; only graph documents
   are removed by design). The legacy `~/lightrag/kg_mcp/kg_ingest.py` was moved away during the
   test, proving the repo copy is the one that ran.
+- **Review fixes verified 2026-10-02** (repo `52ac0b3`, live MCP, every run observed): the default
+  backup resolved to the shipped script and wrote `~/backups/kg/kg_t2_20261002_0849.tar.gz` with
+  `backup_before/after: ok`; a deliberately broken `backup="bash /nonexistent/nope.sh"` recorded
+  `failed (exit 127)` twice plus two `warnings` in `job.json` and in the log; `kg_jobs` printed
+  `kind/step/step_index/steps_total/manifest` for staged jobs and nothing bogus for book fields;
+  `kg_rollback` real run returned `removed: ["t2-note.md"]` (file name, matching the dry run) with
+  `docs[{file,doc_id,status}]`; a hand-made job for a nonexistent graph was hidden by default and
+  shown with `include_stale=True` carrying the "graph no longer exists" note; and
+  `kg_delete(kg_t2, delete_data=true)` returned `removed_jobs: [both t2 jobs]`.
 - **Release caveat — this is why the tools can be missing on a fresh machine.** They exist on
-  `main` (`27321ef` naming + `0fda823` packaging) and are **not** in tag `v0.2.1`: a machine that
-  follows the clone line below (`--branch v0.2.1`) gets 11 tools and no `kg_add_sites` /
-  `kg_add_videos`. Clone `main` — or the newest tag once one is cut past `0fda823` — whenever the
-  staged ingest is needed. Confirm with `hermes mcp test lightrag-kg`: the healthy list is
-  **14 tools** (11 + `kg_add_videos`, `kg_add_sites`, `kg_rollback`).
+  `main` (`27321ef` naming, `0fda823` packaging, `52ac0b3` review fixes) and are **not** in tag
+  `v0.2.1`: a machine that follows the clone line below (`--branch v0.2.1`) gets 11 tools and no
+  `kg_add_sites` / `kg_add_videos`. Clone `main` — or the newest tag once one is cut past
+  `52ac0b3` — whenever the staged ingest is needed. Confirm with `hermes mcp test lightrag-kg`: the
+  healthy list is **14 tools** (11 + `kg_add_videos`, `kg_add_sites`, `kg_rollback`). The repo also
+  ships, on `main` only, the `kg_graph_backup.sh` default and the fixed `install.sh` mode — a
+  `v0.2.1` clone still fails `./install.sh` with `Permission denied`.
 
 ## Reloading a graph after a corpus-wide text fix
 
