@@ -1,7 +1,7 @@
 ---
 name: book-to-lightrag-pipeline
 description: "Use when building, querying or operating kg_* LightRAG graphs: batch book→skill→graph pipelines, staged site/video ingest (kg_add_sites/kg_add_videos/kg_rollback), local embeddings, the lightrag-mcp server and its kg-query/kg-ask/kg-add-book CLI, and with/without-book eval reports."
-version: 2.1.0
+version: 2.2.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -246,25 +246,27 @@ the profile side, as a thin shim over `kg-ask`.
   `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
   `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
 - **Skill-first install on a fresh machine:** install ONLY the skill; it drives the repo (never vendor
-  code into a skill). Verified end to end 2026-09-23 against the published `v0.2.1`:
+  code into a skill). Current pin: **`v0.2.2`** (14 tools incl. the staged ingest). Verified end to
+  end 2026-09-23 against `v0.2.1` (11 tools) and re-verified 2026-10-02 against `v0.2.2`:
   1. install/copy this skill (`hermes skills install mah92/my-hermes-skills/book-to-lightrag-pipeline`
      or copy the folder into `~/.hermes/skills/`);
-  2. clone the release — both repos are PUBLIC, so HTTPS needs no key.
-     **`v0.2.1` stops at 11 tools (no `kg_add_sites`/`kg_add_videos`)**; clone `main` when the
-     staged ingest is needed, or the newest tag once one exists past `0fda823`:
-     `git clone --depth 1 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
-     (for the older surface: `--branch v0.2.1`; override the venv with `LIGHTRAG_MCP_VENV=...`;
-     ~1.7 GB with the CPU torch wheel);
+  2. clone the release — both repos are PUBLIC, so HTTPS needs no key:
+     `git clone --depth 1 --branch v0.2.2 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
+     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.7 GB with the CPU torch wheel).
+     Fall back to `main` if the tag is somehow absent — and note `v0.2.1` and older stop at 11 tools
+     (no `kg_add_sites`/`kg_add_videos`), so never pin below `v0.2.2` when the staged ingest is wanted;
   3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
   4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
   5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
 
-  Rehearsed twice on this box in throwaway venvs (since removed): v0.2.0 with a cold pip cache
-  (~6.5 min, 1.7 GB with the CPU torch wheel) and v0.2.1 with the cache warm. Both runs: HTTPS clone
-  of the tag -> `install.sh` -> `--check` OK (lightrag 1.5.7, mcp 1.30, pymupdf, four console
-  scripts, tiktoken cache) -> `kg-query` returned ~26-30K chars of context -> `kg-mcp` served 11
-  tools and `kg_list` saw kg_nav. Nothing needs a key or a running Hermes to pass those steps; only
-  the MCP registration writes config.yaml.
+  Rehearsed twice in throwaway venvs (since removed): v0.2.0 with a cold pip cache (~6.5 min, 1.7 GB
+  with the CPU torch wheel) and v0.2.1 with the cache warm — both of those served 11 tools. The
+  `v0.2.2` check was done against a fresh `--depth 1 --branch v0.2.2` clone of the pushed tag: the
+  helpers are present with `install.sh` and `kg_graph_backup.sh` mode 755, the tagged
+  `lightrag_kg_mcp.server` imports on the real MCP venv and lists **14 tools**, and
+  `install.sh --check` ends `OK: install looks healthy` (it now also reports
+  `staged-ingest helpers ok`). Nothing needs a key or a running Hermes to pass those steps; only the
+  MCP registration writes config.yaml.
 - **`tiktoken` tries to download its BPE file from an Azure blob that this box cannot route to**
 (`openaipublic.blob.core.windows.net` — a 15 s curl from here never answers, and Python raises
 errno 101; LightRAG builds the tokenizer at load time, so the whole process dies). The fix is
@@ -428,14 +430,14 @@ quirks) lives in the scripts the steps call, never in the server.
   `docs[{file,doc_id,status}]`; a hand-made job for a nonexistent graph was hidden by default and
   shown with `include_stale=True` carrying the "graph no longer exists" note; and
   `kg_delete(kg_t2, delete_data=true)` returned `removed_jobs: [both t2 jobs]`.
-- **Release caveat — this is why the tools can be missing on a fresh machine.** They exist on
-  `main` (`27321ef` naming, `0fda823` packaging, `52ac0b3` review fixes) and are **not** in tag
-  `v0.2.1`: a machine that follows the clone line below (`--branch v0.2.1`) gets 11 tools and no
-  `kg_add_sites` / `kg_add_videos`. Clone `main` — or the newest tag once one is cut past
-  `52ac0b3` — whenever the staged ingest is needed. Confirm with `hermes mcp test lightrag-kg`: the
-  healthy list is **14 tools** (11 + `kg_add_videos`, `kg_add_sites`, `kg_rollback`). The repo also
-  ships, on `main` only, the `kg_graph_backup.sh` default and the fixed `install.sh` mode — a
-  `v0.2.1` clone still fails `./install.sh` with `Permission denied`.
+- **Release history — pin on `v0.2.2` (or newer).** `v0.2.2` (annotated tag on commit `c789336`) is
+  the first release that carries the staged ingest: 14 tools, `kg_ingest.py` + `kg_graph_backup.sh`
+  inside the package, executable `install.sh`, the fixed `kg_jobs` / `kg_rollback` / `kg_delete`
+  behaviour and the phase-labelled backup archives. `v0.2.1` and older are 11 tools with none of
+  that, and their `./install.sh` fails with `Permission denied` because the executable bit was never
+  stored in git. Between releases `main` sits ahead of the newest tag, so a machine that needs the
+  staged ingest takes `v0.2.2` or newer — never `v0.2.1`. Confirm with
+  `hermes mcp test lightrag-kg`: the healthy list is **14 tools**.
 
 ## Reloading a graph after a corpus-wide text fix
 
