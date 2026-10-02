@@ -1,7 +1,7 @@
 ---
 name: book-to-lightrag-pipeline
-description: "Use when building, querying or operating kg_* LightRAG graphs: batch book→skill→graph pipelines, local embeddings, the lightrag-mcp server and its kg-query/kg-ask/kg-add-book CLI, and with/without-book eval reports."
-version: 2.0.0
+description: "Use when building, querying or operating kg_* LightRAG graphs: batch book→skill→graph pipelines, staged site/video ingest (kg_add_sites/kg_add_videos/kg_rollback), local embeddings, the lightrag-mcp server and its kg-query/kg-ask/kg-add-book CLI, and with/without-book eval reports."
+version: 2.1.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -240,7 +240,8 @@ the profile side, as a thin shim over `kg-ask`.
   hyphens. `kg_query`/`kg-query` = retrieve context only (no answer LLM — cheap, safe for grounding);
   `kg_ask`/`kg-ask` = retrieve + answer with `[ref N]` citations (add `--persona-file`/`--name` for a
   persona); `kg_add_book`/`kg-add-book` = PDF -> skill md -> graph (long: `background=True` + `kg_jobs`);
-  `kg_create`, `kg_jobs`, `kg_add_markdown`, `kg_add_repo`, `kg_register`, `kg_delete`, `kg_list`,
+  `kg_create`, `kg_jobs`, `kg_add_markdown`, `kg_add_repo`, `kg_add_videos`, `kg_add_sites`,
+  `kg_rollback`, `kg_register`, `kg_delete`, `kg_list`,
   `kg_setup` are MCP-only (no CLI);
   `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
   `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
@@ -248,9 +249,12 @@ the profile side, as a thin shim over `kg-ask`.
   code into a skill). Verified end to end 2026-09-23 against the published `v0.2.1`:
   1. install/copy this skill (`hermes skills install mah92/my-hermes-skills/book-to-lightrag-pipeline`
      or copy the folder into `~/.hermes/skills/`);
-  2. clone the pinned release — both repos are PUBLIC, so HTTPS needs no key:
-     `git clone --depth 1 --branch v0.2.1 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
-     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.7 GB with the CPU torch wheel);
+  2. clone the release — both repos are PUBLIC, so HTTPS needs no key.
+     **`v0.2.1` stops at 11 tools (no `kg_add_sites`/`kg_add_videos`)**; clone `main` when the
+     staged ingest is needed, or the newest tag once one exists past `0fda823`:
+     `git clone --depth 1 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
+     (for the older surface: `--branch v0.2.1`; override the venv with `LIGHTRAG_MCP_VENV=...`;
+     ~1.7 GB with the CPU torch wheel);
   3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
   4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
   5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
@@ -276,10 +280,13 @@ already-generated skill and PROCESSED documents are all skipped, so a crash cost
 ## MCP server (lightrag-mcp / `lightrag-kg`) — what breaks and how to reload
 
 Source of truth: `~/lightrag/kg_mcp/repo` (git, `mah92/lightrag-mcp`,
-`src/lightrag_kg_mcp/server.py`); `~/lightrag/kg_mcp/server.py` is a plain copy — mirror it
-after every edit.
+`src/lightrag_kg_mcp/server.py`); `~/lightrag/kg_mcp/server.py` and `kg_ingest.py` are plain
+copies — mirror them after every edit. `kg_ingest.py` (the staged-ingest runner) ships inside the
+repo since `0fda823`; the server resolves it through the shared `kg_common.script()` helper
+(beside the module first, then `~/lightrag/kg_mcp`), so a fresh clone no longer fails with
+`runner missing`.
 
-All 11 tools (`hermes mcp test lightrag-kg` prints exactly this list). CLI = same name with hyphens,
+All 14 tools (`hermes mcp test lightrag-kg` prints exactly this list). CLI = same name with hyphens,
 present only where the operation is useful outside an agent:
 
 | tool | what it does | use it when | CLI |
@@ -289,6 +296,9 @@ present only where the operation is useful outside an agent:
 | `kg_add_book` | PDF → skill markdown → graph (`background=True`) | ingesting a book/paper | `kg-add-book` |
 | `kg_add_markdown` | insert markdown text/file/dir directly (`replace=`) | one note, or refreshing a doc | — |
 | `kg_add_repo` | repo → arc42 doc + its reference PDFs → graph | code/document repos | — |
+| `kg_add_videos` | staged ingest of VIDEOS: `steps` run in order (download → ASR → correct → English → skill → insert) | a video playlist/corpus | — |
+| `kg_add_sites` | staged ingest of WEBSITES: crawl → what users say → one skill per site → insert | supplier/product sites | — |
+| `kg_rollback` | undo a staged run: delete exactly the docs that run declared in `inserts` | after a bad ingest, never on a live run | — |
 | `kg_register` | register an existing graph kept outside `~/lightrag/kg` (`root`) | adopting a graph built elsewhere | — |
 | `kg_create` | create an empty graph (+ its embedding model) | starting a new topic domain | — |
 | `kg_list` | graphs, embedding model, doc count | first call in a session | — |
@@ -347,7 +357,7 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 
 1. `LIGHTRAG_MCP_VENV=<the venv that runs the server> ./install.sh --check` → must end
    `OK: install looks healthy` (lightrag+mcp+pymupdf imports, four console scripts, DEEPSEEK key).
-2. `hermes mcp test lightrag-kg` → connects, lists the 11 tools above.
+2. `hermes mcp test lightrag-kg` → connects, lists the 14 tools above.
 3. `kg-list` equivalent: `kg_query -g <graph> "..." ` must resolve `<graph>` (registry + root) —
    or call the `kg_list` tool; a missing graph is the usual symptom of a wrong `~/lightrag/kg` entry.
 4. `kg-query "<question>" -g <graph> -m naive` → prints `graph_dir:` + `=== CONTEXT (N chars) ===`.
@@ -356,6 +366,42 @@ basenames, not full paths) — that is the way to refresh a changed doc.
    `~/lightrag/jobs/<id>/job.log`.
 
 ## Staged ingest jobs (kg_add_videos / kg_add_sites / kg_rollback)
+
+The MCP is a thin orchestrator for corpora that are not a single PDF (video playlists, supplier
+websites). Both ingest tools take a **JSON array of steps** and run them in order — the order is
+the contract (videos: collect → ASR → correct → English → one skill per video → insert; sites:
+crawl → what users say → one skill per site → insert). Each step is
+`{"name": "...", "cmd": "shell command", "inserts": ["corpus__x.md", ...]}`; `cmd` runs through a
+shell with `cwd=workdir`, and the volatile machinery (yt-dlp, proxies, ASR models, per-site
+quirks) lives in the scripts the steps call, never in the server.
+
+- **The call returns a job id immediately** — the work runs in a detached runner,
+  `kg_ingest.py` (shipped in the repo since `0fda823`; before that it existed only at
+  `~/lightrag/kg_mcp/kg_ingest.py`, so a fresh clone failed with `runner missing`). Per-step
+  state, the manifest and the log live in `~/lightrag/jobs/<id>/{spec.json,job.json,job.log}`;
+  poll with `kg_jobs` (same store as `kg_add_book` jobs: queued/running/done/failed, `step`,
+  `step_index`).
+- **`inserts` is the manifest and the rollback contract.** `kg_rollback(job_id[, dry_run])`
+  deletes exactly the documents a run inserted — matched by **basename** (LightRAG stores
+  basenames, not full paths), so declare distinctive names or a generic one (`ch04.md`) can
+  collide with an unrelated document already in the graph. A step's inserts are written to the
+  manifest even when that step exits non-zero, so always check `dry_run=true` first.
+- `backup` defaults to `bash ~/.hermes/scripts/kg_graph_backup.sh` and runs before and after the
+  job. It archives **every** graph under `~/lightrag/kg` (~25 s with a 100-doc graph present) and
+  keeps the 3 newest per graph; pass `backup=""` for a test run.
+- **Verified end to end 2026-10-02** (repo `0fda823`, live MCP): `kg_create` a temp graph →
+  `kg_add_markdown` one note → `kg_add_videos` with a single step declaring
+  `inserts=["stagetest-note.md"]` → job `done` with the manifest recorded → `kg_rollback(dry_run)`
+  returned `would_remove: [stagetest-note.md]` → `kg_rollback` removed 1 document and
+  `kv_store_doc_status.json` went empty (the input `.md` file stays on disk; only graph documents
+  are removed by design). The legacy `~/lightrag/kg_mcp/kg_ingest.py` was moved away during the
+  test, proving the repo copy is the one that ran.
+- **Release caveat — this is why the tools can be missing on a fresh machine.** They exist on
+  `main` (`27321ef` naming + `0fda823` packaging) and are **not** in tag `v0.2.1`: a machine that
+  follows the clone line below (`--branch v0.2.1`) gets 11 tools and no `kg_add_sites` /
+  `kg_add_videos`. Clone `main` — or the newest tag once one is cut past `0fda823` — whenever the
+  staged ingest is needed. Confirm with `hermes mcp test lightrag-kg`: the healthy list is
+  **14 tools** (11 + `kg_add_videos`, `kg_add_sites`, `kg_rollback`).
 
 ## Reloading a graph after a corpus-wide text fix
 
