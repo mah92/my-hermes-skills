@@ -107,7 +107,10 @@ special cases.
 3. **Verify:** `kg_list()` shows the document, then `kg_query(graph, question)` returns context and
    `kg_ask` an answer with `[ref N]` citations.
 
-### Which model does what (measured on a 5-page arXiv paper, 4 478 source words, numbers from `scripts/ocr_quality.py`)
+### Which model does what (measured on a 5-page ENGLISH arXiv paper, 4 478 source words, numbers from `scripts/ocr_quality.py`)
+
+The table is Latin-script only. Persian is out of scope for every engine except DeepSeek-OCR
+(see the rule above).
 
 | engine | role | recall of source 5-grams | precision | repeated 6-grams | verdict |
 |---|---|---|---|---|---|
@@ -169,9 +172,17 @@ document and the graph, and no book/video/site/repo ingest tools any more (they 
 
 - **One add path: `kg_add_markdown`** (MCP) — inline markdown, a `.md` file, a directory of them,
   or a **PDF/image that is OCR'd to markdown first** (param `ocr="unlimited"|"gemma"`).
-- **OCR engine = Unlimited-OCR** (`~/AI/Unlimited-OCR`, `ocr.py` + its venv) — the box's primary OCR
-  (it replaced DeepSeek-OCR). Alternative backend `gemma` renders pages with pymupdf and asks the
-  local Gemma 4 E2B llama.cpp vision server (`gemma start`, `http://127.0.0.1:8081/v1`).
+- **OCR engine depends on the language — this is a hard rule:**
+  - **Persian: DeepSeek-OCR only** (`ocr="deepseek"`, via `pdf_craft`). **Unlimited-OCR does not work
+    on Persian at all** (Ali's verdict, 2026-10-27) — do not offer it for Persian documents, and do
+    not "improve" the Persian path with it.
+  - Latin/other scripts: **Unlimited-OCR** (`~/AI/Unlimited-OCR`, `ocr.py` + its venv).
+  - `gemma` (local Gemma 4 E2B vision) only for simple, sparse images — never dense pages.
+  - DeepSeek-OCR setup: dedicated env `~/AI/deepseek-ocr-venv` (`pdf_craft` + `transformers==4.47.1`;
+    `doc-page-extractor` needs `<4.48`, otherwise the model import dies on
+    `cannot import name 'LlamaFlashAttention2'`), `OCR_DEEPSEEK_PY` overrides the interpreter,
+    `DEEPSEEK_OCR_CACHE` the weights directory. Weights (~6.3 GB) are fetched by pdf_craft on first
+    use; PDF input only.
 - **Auto-listing:** an added document is written to `<graph>/inputs/` and is returned by `kg_list()`
   under `documents` immediately — no separate registration step.
 - **Local LLM option:** a graph's `meta.json` may pin `llm_model` / `llm_base_url` / `llm_api_key`;
