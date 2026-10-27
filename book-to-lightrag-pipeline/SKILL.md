@@ -1,7 +1,7 @@
 ---
 name: book-to-lightrag-pipeline
-description: "Use when building, querying or operating kg_* LightRAG graphs: batch book→skill→graph pipelines, staged site/video ingest (kg_add_sites/kg_add_videos/kg_rollback), local embeddings, the lightrag-mcp server and its kg-query/kg-ask/kg-add-book CLI, and with/without-book eval reports."
-version: 2.2.0
+description: "Use when building, querying or operating kg_* LightRAG graphs: direct markdown/PDF ingest via kg_add_markdown (OCR: Unlimited-OCR or local Gemma), local embeddings, the lightrag-mcp server and its kg-query/kg-ask CLI, and with/without-book eval reports."
+version: 3.0.0
 author: Hermes Agent
 license: MIT
 metadata:
@@ -88,6 +88,53 @@ per 500–700-page book at flash-model rates.
   the run's `metadata.json` (per-run, PID-suffixed) — another extraction may be
   running beside yours.
 
+## Standard document pipeline (verified 2026-10-27, measured)
+
+The one path to put a document into a graph. No skill generation, no staged ingest, no per-format
+special cases.
+
+1. **OCR the source to markdown.** `kg_add_markdown(md_path=<pdf|png>, ocr="unlimited")` (default)
+   or run the OCR standalone and add the `.md`:
+   `<HOME>/AI/Unlimited-OCR/venv/bin/python <HOME>/AI/Unlimited-OCR/ocr.py <pdf> -o <dir> --mode base`.
+   - **Render page-by-page and cap `max_length` at 4096.** `infer_multi` with the default 32768
+     tokens dies with `torch.OutOfMemoryError` on an 8 GB GPU (the logits tensor). One page at
+     `image_size=1024, crop_mode=False` per call is stable and costs ~10 s/page.
+   - Unlimited-OCR emits `<|det|>text [x1,y1,x2,y2]<|/det|>` tags and LaTeX for equations; that is
+     the expected shape, not corruption.
+2. **Add it:** `kg_add_markdown(graph, md_path=<md|pdf>, doc_name=..., replace=<bool>)`. A PDF is
+   OCR'd inside the call; the stored document lands in `<graph>/inputs/` and shows up in `kg_list()`
+   under `documents` immediately (no separate registration).
+3. **Verify:** `kg_list()` shows the document, then `kg_query(graph, question)` returns context and
+   `kg_ask` an answer with `[ref N]` citations.
+
+### Which model does what (measured on a 5-page arXiv paper, 4 478 source words, numbers from `scripts/ocr_quality.py`)
+
+| engine | role | recall of source 5-grams | precision | repeated 6-grams | verdict |
+|---|---|---|---|---|---|
+| Unlimited-OCR | OCR | **77.1 %** | 78.7 % | 2.9 % | the OCR engine — use it |
+| Gemma 4 E2B vision (llama.cpp, mmproj) | OCR | 7.5 % | 39.4 % | **88.1 %** | unusable as OCR: it paraphrases/hallucinates dense pages |
+| Gemma 4 E2B | graph extraction + answers | n/a | n/a | n/a | good: 278 entities / 171 relations from clean markdown, correct answers |
+
+- Gemma's vision handles a **sparse one-page form** (it read a Persian form's fields correctly) but
+  not a dense page. With its thinking mode on it can spend the whole `max_tokens` budget on
+  reasoning and return empty content; with `chat_template_kwargs={"enable_thinking": false}` at
+  200 dpi it returned only 308 of 864 page words. Do not put it in an OCR path.
+- Gemma as the extraction/answer LLM is fine and fully local (`gemma start`; pin
+  `llm_model`/`llm_base_url`/`llm_api_key` in the graph's `meta.json`). ~9 min for 20 chunks at
+  ~150 tok/s. Its earlier "three contributions were…" wrong answer came from Gemma-OCR garbage,
+  not from the LLM: the same question on clean markdown answered exactly right.
+- **VRAM is exclusive:** Unlimited-OCR needs ~6.7 GB of the 8 GB card — `gemma stop` before an OCR
+  run, `gemma start` before an extraction run.
+
+Measure any OCR output against the PDF's own text layer before trusting it:
+
+```
+python scripts/ocr_quality.py paper.pdf ocr_output.md      # recall / precision / dup6 + verdict
+```
+
+`recall < 60 %` or `dup6 > 20 %` means the output is a paraphrase or a degeneration loop, not a
+transcription — redo it with Unlimited-OCR.
+
 ## Retrieval layer on top of a book skill (FINAL after round 2, 2026-09-11)
 
 Chapter files alone don't let an agent find cross-chapter answers. Two bake-off
@@ -113,6 +160,26 @@ answer path.
   metrics = answer quality, context tokens, golden-chapter coverage. Present results
   as an IMAGE (table-as-image pattern), never a markdown table in Bale. Get owner
   sign-off on numbers before wiring a layer in.
+
+## DIRECT INGEST — the current rule (2026-10-27)
+
+Documents go into a graph **directly**. There is NO skill/codebook conversion step between a
+document and the graph, and no book/video/site/repo ingest tools any more (they were removed from
+`lightrag-mcp` in 0.3.0).
+
+- **One add path: `kg_add_markdown`** (MCP) — inline markdown, a `.md` file, a directory of them,
+  or a **PDF/image that is OCR'd to markdown first** (param `ocr="unlimited"|"gemma"`).
+- **OCR engine = Unlimited-OCR** (`~/AI/Unlimited-OCR`, `ocr.py` + its venv) — the box's primary OCR
+  (it replaced DeepSeek-OCR). Alternative backend `gemma` renders pages with pymupdf and asks the
+  local Gemma 4 E2B llama.cpp vision server (`gemma start`, `http://127.0.0.1:8081/v1`).
+- **Auto-listing:** an added document is written to `<graph>/inputs/` and is returned by `kg_list()`
+  under `documents` immediately — no separate registration step.
+- **Local LLM option:** a graph's `meta.json` may pin `llm_model` / `llm_base_url` / `llm_api_key`;
+  pinning them to the Gemma server makes extraction fully offline (verified: 5-page paper OCR'd and
+  inserted with `gemma-4-e2b`, ~9 min including OCR, answers with `[ref N]` citations).
+- **Removed (do not reintroduce):** `kg_add_book`, `kg_add_repo`, `kg_add_videos`, `kg_add_sites`,
+  the book→skill generator, `make_sections.py`, `make_arc42.py`, `kg_ingest.py` and the `kg-add-book`
+  CLI. Old job records can still be inspected with `kg_jobs` / undone with `kg_rollback`.
 
 ## Knowledge-graph enrichment layer (LightRAG)
 
@@ -176,7 +243,7 @@ Deliverable recipes (scripts + templates in references):
 - Report FORMAT rules (verbatim questions, verbatim answers, per-answer cost
   banners — user corrected all three): `references/eval-report-format.md`
 - Persian PDFs: reportlab cannot shape RTL glyphs. Working stack = hand-written
-  RTL HTML (Vazir font via file:///home/oem/.fonts/vazir/, dir=rtl) rendered with
+  RTL HTML (Vazir font via file://<HOME>/.fonts/vazir/, dir=rtl) rendered with
   weasyprint (pip-installed into the hermes venv). Verify rendering by rasterizing
   pages and inspecting with vision. `references/persian-pdf-report.md`
 - Tutorial/explainer PDFs (e.g. "short LightRAG tutorial") are a separate
@@ -222,7 +289,7 @@ The generation prompt must include "do not rewrite LaTeX" so chapters keep formu
 ### Install shape (one venv, one package, then a skill)
 
 `mah92/lightrag-mcp` -> `./install.sh` puts the MCP server AND the CLI in ONE venv
-(`kg-mcp`, `kg-query`, `kg-ask`, `kg-add-book`). Never split them across two interpreters: that is
+(`kg-mcp`, `kg-query`, `kg-ask`). Never split them across two interpreters: that is
 how `lightrag` went missing while `kg_create`/`kg_list` kept working — **whichever venv runs a
 `kg-*` entry point needs `lightrag` + `mcp<2` + `torch` + `pymupdf`**.
 
@@ -237,36 +304,30 @@ text, chat ids, graph choice — e.g. `askar.py` + `personas/askar.txt`) stays O
 the profile side, as a thin shim over `kg-ask`.
 
 - **Canonical names (one operation, one name):** MCP tools use underscores, the CLI the same name with
-  hyphens. `kg_query`/`kg-query` = retrieve context only (no answer LLM — cheap, safe for grounding);
-  `kg_ask`/`kg-ask` = retrieve + answer with `[ref N]` citations (add `--persona-file`/`--name` for a
-  persona); `kg_add_book`/`kg-add-book` = PDF -> skill md -> graph (long: `background=True` + `kg_jobs`);
-  `kg_create`, `kg_jobs`, `kg_add_markdown`, `kg_add_repo`, `kg_add_videos`, `kg_add_sites`,
-  `kg_rollback`, `kg_register`, `kg_delete`, `kg_list`,
-  `kg_setup` are MCP-only (no CLI);
-  `kg-mcp` is the server itself. Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` ->
-  `kg-query`, `kg_answer.py`/`kg_book.py` -> `kg-ask`/`kg-add-book`.
+  hyphens. `kg_query`/`kg-query` = retrieve context only; `kg_ask`/`kg-ask` = retrieve + answer with
+  `[ref N]` citations (add `--persona-file`/`--name` for a persona); `kg_add_markdown` = the ONLY
+  ingest path (markdown text, `.md` file/dir, or PDF/image OCR'd to markdown); `kg_create`, `kg_list`,
+  `kg_jobs`, `kg_rollback`, `kg_register`, `kg_delete`, `kg_setup` are MCP-only;
+  `kg-mcp` is the server itself. Removed in 0.3.0 and never to be reintroduced: `kg_add_book`,
+  `kg_add_repo`, `kg_add_videos`, `kg_add_sites`, the `kg-add-book` CLI and the book→skill generator.
+  Legacy names in older notes: `kg_q.py`/`kg_fetch_context.py` -> `kg-query`, `kg_answer.py` -> `kg-ask`.
 - **Skill-first install on a fresh machine:** install ONLY the skill; it drives the repo (never vendor
-  code into a skill). Current pin: **`v0.2.2`** (14 tools incl. the staged ingest). Verified end to
-  end 2026-09-23 against `v0.2.1` (11 tools) and re-verified 2026-10-02 against `v0.2.2`:
+  code into a skill). Current pin: **`v0.3.0`** (10 tools, direct ingest; `v0.2.2` = 14 tools with the
+  removed staged ingest, `v0.2.1` = 11 tools):
   1. install/copy this skill (`hermes skills install mah92/my-hermes-skills/book-to-lightrag-pipeline`
      or copy the folder into `~/.hermes/skills/`);
   2. clone the release — both repos are PUBLIC, so HTTPS needs no key:
-     `git clone --depth 1 --branch v0.2.2 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
-     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.7 GB with the CPU torch wheel).
-     Fall back to `main` if the tag is somehow absent — and note `v0.2.1` and older stop at 11 tools
-     (no `kg_add_sites`/`kg_add_videos`), so never pin below `v0.2.2` when the staged ingest is wanted;
+     `git clone --depth 1 --branch v0.3.0 https://github.com/mah92/lightrag-mcp.git && cd lightrag-mcp && ./install.sh`
+     (override the venv with `LIGHTRAG_MCP_VENV=...`; ~1.7 GB with the CPU torch wheel). Fall back to
+     `main` if the tag is absent;
   3. ASK THE USER FIRST — `hermes mcp add lightrag-kg --command <venv>/bin/kg-mcp` edits config.yaml;
   4. verify: `./install.sh --check`, then `<venv>/bin/kg-query "test" -g <graph>`;
-  5. build or register a graph: `<venv>/bin/kg-add-book <graph> <pdf>` / `kg_register`.
+  5. create or register a graph (`kg_create` / `kg_register`), then add documents with
+     `kg_add_markdown` (PDFs go through `ocr_to_md.py`).
 
-  Rehearsed twice in throwaway venvs (since removed): v0.2.0 with a cold pip cache (~6.5 min, 1.7 GB
-  with the CPU torch wheel) and v0.2.1 with the cache warm — both of those served 11 tools. The
-  `v0.2.2` check was done against a fresh `--depth 1 --branch v0.2.2` clone of the pushed tag: the
-  helpers are present with `install.sh` and `kg_graph_backup.sh` mode 755, the tagged
-  `lightrag_kg_mcp.server` imports on the real MCP venv and lists **14 tools**, and
-  `install.sh --check` ends `OK: install looks healthy` (it now also reports
-  `staged-ingest helpers ok`). Nothing needs a key or a running Hermes to pass those steps; only the
-  MCP registration writes config.yaml.
+  The 0.3.0 check on this box: `hermes mcp test lightrag-kg` lists **10 tools** and
+  `install.sh --check` must end `OK: install looks healthy` (it reports `OCR helper ok (ocr_to_md.py)`).
+  Nothing needs a key or a running Hermes to pass those steps; only the MCP registration writes config.yaml.
 - **`tiktoken` tries to download its BPE file from an Azure blob that this box cannot route to**
 (`openaipublic.blob.core.windows.net` — a 15 s curl from here never answers, and Python raises
 errno 101; LightRAG builds the tokenizer at load time, so the whole process dies). The fix is
@@ -274,10 +335,11 @@ errno 101; LightRAG builds the tokenizer at load time, so the whole process dies
 that directory already exists** — so a fresh machine must populate the cache (a network that can
 reach the blob does it with `TIKTOKEN_CACHE_DIR=~/.cache/tiktoken_cache python -c "import tiktoken;
 tiktoken.get_encoding('o200k_base')"`; `install.sh` attempts exactly that and warns if it cannot).
-- **Long book jobs: `kg_add_book(..., background=True)`** returns a job id at once (log +
-`job.json` under `~/lightrag/jobs/<id>/`, poll with the `kg_jobs` tool, the state file survives an
-MCP restart). The job body is `kg_add_book.py`, which is resumable — an existing extraction, an
-already-generated skill and PROCESSED documents are all skipped, so a crash costs only the gaps.
+- **OCR of a multi-page PDF with Gemma is slow-ish and local:** `kg_add_markdown(md_path=pdf, ocr="gemma")`
+  renders pages at 150 dpi and asks the local llama.cpp server (context 16K, ~150 tok/s). A 5-page
+  paper: OCR + insert ≈ 9 minutes end to end; Unlimited-OCR (`ocr="unlimited"`, default) is the faster
+  and more accurate choice for Persian and dense tables, but its venv needs ~6.7 GB free VRAM, so run
+  it with `gemma stop`.
 
 ## MCP server (lightrag-mcp / `lightrag-kg`) — what breaks and how to reload
 
@@ -288,23 +350,19 @@ repo since `0fda823`; the server resolves it through the shared `kg_common.scrip
 (beside the module first, then `~/lightrag/kg_mcp`), so a fresh clone no longer fails with
 `runner missing`.
 
-All 14 tools (`hermes mcp test lightrag-kg` prints exactly this list). CLI = same name with hyphens,
-present only where the operation is useful outside an agent:
+All 10 tools (`hermes mcp test lightrag-kg` prints exactly this list). CLI = same name with
+hyphens, present only where the operation is useful outside an agent:
 
 | tool | what it does | use it when | CLI |
 |---|---|---|---|
 | `kg_query` | retrieve context only, no answer LLM | grounding, cheap probing, feeding another model | `kg-query` |
 | `kg_ask` | retrieve + answer with `[ref N]` citations | an answer in the graph's own words | `kg-ask` |
-| `kg_add_book` | PDF → skill markdown → graph (`background=True`) | ingesting a book/paper | `kg-add-book` |
-| `kg_add_markdown` | insert markdown text/file/dir directly (`replace=`) | one note, or refreshing a doc | — |
-| `kg_add_repo` | repo → arc42 doc + its reference PDFs → graph | code/document repos | — |
-| `kg_add_videos` | staged ingest of VIDEOS: `steps` run in order (download → ASR → correct → English → skill → insert) | a video playlist/corpus | — |
-| `kg_add_sites` | staged ingest of WEBSITES: crawl → what users say → one skill per site → insert | supplier/product sites | — |
-| `kg_rollback` | undo a staged run: delete exactly the docs that run declared in `inserts` | after a bad ingest, never on a live run | — |
+| `kg_add_markdown` | **the only add path**: markdown text / `.md` file/dir / PDF-image (OCR: unlimited or gemma) | every document ingest | — |
+| `kg_list` | graphs, embedding model, doc count **and document names** | first call in a session; confirm an add | — |
 | `kg_register` | register an existing graph kept outside `~/lightrag/kg` (`root`) | adopting a graph built elsewhere | — |
 | `kg_create` | create an empty graph (+ its embedding model) | starting a new topic domain | — |
-| `kg_list` | graphs, embedding model, doc count | first call in a session | — |
-| `kg_jobs` | background job state, doc counts, log path | after `kg_add_book(background=True)` | — |
+| `kg_jobs` | state of legacy background jobs | inspecting an old job | — |
+| `kg_rollback` | undo a legacy staged run by its manifest | old job records only | — |
 | `kg_delete` | remove a graph (external data needs `delete_data=true`) | retiring a graph, never a live one | — |
 | `kg_setup` | pre-download embedding models, verify the environment | fresh install, new model | — |
 
@@ -359,7 +417,7 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 
 1. `LIGHTRAG_MCP_VENV=<the venv that runs the server> ./install.sh --check` → must end
    `OK: install looks healthy` (lightrag+mcp+pymupdf imports, four console scripts, DEEPSEEK key).
-2. `hermes mcp test lightrag-kg` → connects, lists the 14 tools above.
+2. `hermes mcp test lightrag-kg` → connects, lists the 10 tools above.
 3. `kg-list` equivalent: `kg_query -g <graph> "..." ` must resolve `<graph>` (registry + root) —
    or call the `kg_list` tool; a missing graph is the usual symptom of a wrong `~/lightrag/kg` entry.
 4. `kg-query "<question>" -g <graph> -m naive` → prints `graph_dir:` + `=== CONTEXT (N chars) ===`.
@@ -367,77 +425,12 @@ basenames, not full paths) — that is the way to refresh a changed doc.
 5. For background work: `kg_jobs` shows state running/done plus `docs_inserted`; the log is
    `~/lightrag/jobs/<id>/job.log`.
 
-## Staged ingest jobs (kg_add_videos / kg_add_sites / kg_rollback)
+## Legacy staged-ingest records
 
-The MCP is a thin orchestrator for corpora that are not a single PDF (video playlists, supplier
-websites). Both ingest tools take a **JSON array of steps** and run them in order — the order is
-the contract (videos: collect → ASR → correct → English → one skill per video → insert; sites:
-crawl → what users say → one skill per site → insert). Each step is
-`{"name": "...", "cmd": "shell command", "inserts": ["corpus__x.md", ...]}`; `cmd` runs through a
-shell with `cwd=workdir`, and the volatile machinery (yt-dlp, proxies, ASR models, per-site
-quirks) lives in the scripts the steps call, never in the server.
-
-- **The call returns a job id immediately** — the work runs in a detached runner,
-  `kg_ingest.py` (shipped in the repo since `0fda823`; before that it existed only at
-  `~/lightrag/kg_mcp/kg_ingest.py`, so a fresh clone failed with `runner missing`). Per-step
-  state, the manifest and the log live in `~/lightrag/jobs/<id>/{spec.json,job.json,job.log}`;
-  poll with `kg_jobs` (same store as `kg_add_book` jobs: queued/running/done/failed, `step`,
-  `step_index`).
-- **`inserts` is the manifest and the rollback contract.** `kg_rollback(job_id[, dry_run])`
-  deletes exactly the documents a run inserted — matched by **basename** (LightRAG stores
-  basenames, not full paths), so declare distinctive names or a generic one (`ch04.md`) can
-  collide with an unrelated document already in the graph. A step's inserts are written to the
-  manifest even when that step exits non-zero, so always check `dry_run=true` first. Both the dry
-  run and a real run report **file names** (`would_remove` / `removed`, plus `count`); a real run
-  also returns `docs` with the `doc_id` and status per deletion. (Before the fix the real run
-  returned raw ids like `doc-<md5>:success` while the dry run returned file names.)
-- **`kg_jobs` prints the shape that matches the job kind** — book jobs carry `pdf` +
-  `docs_inserted`, staged jobs carry `kind`, `title`, `step`/`step_index`, `steps_total`,
-  `manifest` and `warnings` (previously every job got the book shape, so a staged job showed
-  `pdf: null` and hid its manifest). Jobs whose graph no longer exists are flagged
-  `"note": "graph no longer exists ..."` and skipped unless `include_stale=True`, and
-  `kg_delete(..., delete_data=true)` removes that graph's job records with the data (a job whose
-  graph is gone can never be rolled back).
-- `backup` defaults to the `kg_graph_backup.sh` that ships **inside the repo** (resolved like every
-  other helper) and archives **only this graph**, before and after the job. The exit code is
-  checked: `job.json` carries `backup_before`/`backup_after` (`ok` / `failed (exit N)` / `skipped`)
-  and a failure is appended to `warnings` — before the fix a missing script produced two silent
-  `No such file or directory` failures while the job still reported `done`, with no backup on disk.
-  `backup=""` skips it (right for throwaway test runs); any other string runs as your own command.
-  `~/.hermes/scripts/kg_graph_backup.sh` is now a one-line wrapper that `exec`s the repo copy, so
-  manual/cron use keeps working off a single implementation.
-- **Archive names are unique and phase-labelled:** `<graph>_<YYYYmmdd_HHMMSS>[_before|_after][_N].tar.gz`.
-  The old name was minute-precision (`..._HHMM`), so a job that finished inside one minute wrote
-  its before-snapshot and after-snapshot to the SAME path — the pre-run state (the one you would
-  restore) was silently overwritten by the post-run state. Now: second precision, `KG_BACKUP_LABEL`
-  (set by `kg_ingest.py` to before/after) and a collision counter. Retention keeps the 5 newest per
-  graph plus `.sha256` (`LIGHTRAG_KG_BACKUP_KEEP`, `LIGHTRAG_KG_BACKUP_DIR`). Verified 2026-10-02:
-  one job produced `kg_t3_..._095124_before.tar.gz` and `kg_t3_..._095124_after.tar.gz`, both
-  `gzip -t` clean; three same-second runs produced `..._100500`, `..._100500_1`, `..._100500_2`.
-- **Verified end to end 2026-10-02** (repo `0fda823`, live MCP): `kg_create` a temp graph →
-  `kg_add_markdown` one note → `kg_add_videos` with a single step declaring
-  `inserts=["stagetest-note.md"]` → job `done` with the manifest recorded → `kg_rollback(dry_run)`
-  returned `would_remove: [stagetest-note.md]` → `kg_rollback` removed 1 document and
-  `kv_store_doc_status.json` went empty (the input `.md` file stays on disk; only graph documents
-  are removed by design). The legacy `~/lightrag/kg_mcp/kg_ingest.py` was moved away during the
-  test, proving the repo copy is the one that ran.
-- **Review fixes verified 2026-10-02** (repo `52ac0b3`, live MCP, every run observed): the default
-  backup resolved to the shipped script and wrote `~/backups/kg/kg_t2_20261002_0849.tar.gz` with
-  `backup_before/after: ok`; a deliberately broken `backup="bash /nonexistent/nope.sh"` recorded
-  `failed (exit 127)` twice plus two `warnings` in `job.json` and in the log; `kg_jobs` printed
-  `kind/step/step_index/steps_total/manifest` for staged jobs and nothing bogus for book fields;
-  `kg_rollback` real run returned `removed: ["t2-note.md"]` (file name, matching the dry run) with
-  `docs[{file,doc_id,status}]`; a hand-made job for a nonexistent graph was hidden by default and
-  shown with `include_stale=True` carrying the "graph no longer exists" note; and
-  `kg_delete(kg_t2, delete_data=true)` returned `removed_jobs: [both t2 jobs]`.
-- **Release history — pin on `v0.2.2` (or newer).** `v0.2.2` (annotated tag on commit `c789336`) is
-  the first release that carries the staged ingest: 14 tools, `kg_ingest.py` + `kg_graph_backup.sh`
-  inside the package, executable `install.sh`, the fixed `kg_jobs` / `kg_rollback` / `kg_delete`
-  behaviour and the phase-labelled backup archives. `v0.2.1` and older are 11 tools with none of
-  that, and their `./install.sh` fails with `Permission denied` because the executable bit was never
-  stored in git. Between releases `main` sits ahead of the newest tag, so a machine that needs the
-  staged ingest takes `v0.2.2` or newer — never `v0.2.1`. Confirm with
-  `hermes mcp test lightrag-kg`: the healthy list is **14 tools**.
+`kg_add_videos` / `kg_add_sites` / `kg_add_repo` no longer exist. Their old job records under
+`~/lightrag/jobs/<id>/` remain readable with `kg_jobs` and reversible with `kg_rollback` (a job's
+`manifest` lists the documents it inserted). Do not build new staged pipelines: OCR the source to
+markdown and add it with `kg_add_markdown`.
 
 ## Reloading a graph after a corpus-wide text fix
 
@@ -510,4 +503,5 @@ Rules learned the hard way:
 - `references/lightrag-tutorial-pieces.md` — reusable blocks for tutorial PDFs
 - `references/choose-your-wow-noagent-log.md` — no-agent generation run log: ToC-vs-heading cutting bug, reasoning-model empty-output trap, silent-scan hole, real numbers
 - `references/scale-pipeline-design.md` — volume architecture: MCP decision framework, dual intake, OCR routing, prototype gate (Choose Your WoW = first prototype data point)
+- `scripts/ocr_quality.py` — OCR fidelity measurement (recall/precision/repeated n-grams) against a PDF text layer
 - `references/think-python-2-generation-log.md` — worked example: full 21-chapter run (packs → batches → scan → cleanup), file inventory, overlay-loss incident + recovery
